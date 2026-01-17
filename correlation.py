@@ -1,0 +1,142 @@
+"""
+Correlation Analysis & Signal Generation Module
+================================================
+Computes Pearson correlations and generates trading signals based on thresholds.
+"""
+
+from typing import Dict, List
+
+import pandas as pd
+import numpy as np
+
+
+MIN_OVERLAPPING_DAYS = 10
+CORRELATION_THRESHOLD_POSITIVE = 0.65
+CORRELATION_THRESHOLD_NEGATIVE = -0.65
+
+
+def compute_correlation_matrix(
+    anchor_series: pd.Series,
+    candidate_series: Dict[str, pd.Series]
+) -> pd.DataFrame:
+    """
+    Compute Pearson correlation between anchor and all candidates.
+    Uses inner join to align timestamps - only days present in BOTH series are used.
+
+    Returns DataFrame with columns: [token_id, correlation, n_points]
+    """
+    results = []
+
+    for token_id, series in candidate_series.items():
+        # CRITICAL: Align time series using inner join
+        # This ensures correlation is only computed on overlapping dates
+        aligned = pd.concat([anchor_series, series], axis=1, join='inner')
+
+        n_points = len(aligned)
+
+        if n_points < MIN_OVERLAPPING_DAYS:
+            # Not enough overlapping data for reliable correlation
+            continue
+
+        # Extract aligned values
+        anchor_vals = aligned.iloc[:, 0].values
+        candidate_vals = aligned.iloc[:, 1].values
+
+        # Compute Pearson correlation coefficient
+        # Using numpy for explicit control: r = cov(X,Y) / (std(X) * std(Y))
+        anchor_mean = np.mean(anchor_vals)
+        candidate_mean = np.mean(candidate_vals)
+
+        anchor_std = np.std(anchor_vals, ddof=1)
+        candidate_std = np.std(candidate_vals, ddof=1)
+
+        # Handle zero variance (constant prices)
+        if anchor_std == 0 or candidate_std == 0:
+            continue
+
+        covariance = np.mean((anchor_vals - anchor_mean) * (candidate_vals - candidate_mean))
+        correlation = covariance / (anchor_std * candidate_std)
+
+        # Validate correlation is in valid range
+        correlation = np.clip(correlation, -1.0, 1.0)
+
+        results.append({
+            'token_id': token_id,
+            'correlation': correlation,
+            'n_points': n_points
+        })
+
+    return pd.DataFrame(results)
+
+
+def generate_signals(
+    correlation_df: pd.DataFrame,
+    markets_lookup: Dict[str, Dict],
+    threshold_positive: float = CORRELATION_THRESHOLD_POSITIVE,
+    threshold_negative: float = CORRELATION_THRESHOLD_NEGATIVE
+) -> pd.DataFrame:
+    """
+    Generate trading signals based on correlation thresholds.
+
+    Signal Logic:
+    - r > threshold_positive: Asset moves WITH thesis -> Buy YES
+    - r < threshold_negative: Asset moves AGAINST thesis -> Buy NO (short YES)
+    - threshold_negative <= r <= threshold_positive: Uncorrelated noise -> Discard
+    """
+    signals = []
+
+    for _, row in correlation_df.iterrows():
+        r = row['correlation']
+        token_id = row['token_id']
+        n_points = row['n_points']
+
+        market_info = markets_lookup.get(token_id, {})
+
+        if r > threshold_positive:
+            action = 'BUY YES'
+            signal_strength = r
+        elif r < threshold_negative:
+            action = 'BUY NO'
+            signal_strength = abs(r)
+        else:
+            # Uncorrelated - skip
+            continue
+
+        signals.append({
+            'token_id': token_id,
+            'question': market_info.get('question', 'Unknown'),
+            'correlation': r,
+            'action': action,
+            'signal_strength': signal_strength,
+            'n_data_points': n_points,
+            'volume_usd': market_info.get('volume_usd', 0)
+        })
+
+    return pd.DataFrame(signals)
+
+
+def construct_portfolio(signals_df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Construct a weighted portfolio from correlated assets.
+    Weight = |r| / sum(|r|) for all selected assets.
+
+    This creates a correlation-weighted basket where stronger
+    correlations get larger allocations.
+    """
+    if signals_df.empty:
+        return signals_df
+
+    # Calculate weights based on correlation strength
+    total_strength = signals_df['signal_strength'].sum()
+
+    if total_strength == 0:
+        return signals_df
+
+    signals_df = signals_df.copy()
+    signals_df['weight'] = signals_df['signal_strength'] / total_strength
+    signals_df['weight_pct'] = signals_df['weight'] * 100
+
+    # Sort by weight descending
+    signals_df = signals_df.sort_values('weight', ascending=False)
+
+    return signals_df
