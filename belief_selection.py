@@ -1,6 +1,6 @@
 """
-Anchor Market Selection Module
-===============================
+Belief Market Selection Module
+==============================
 Two-step process: broad fuzzy search + semantic filtering via MockAI.
 """
 
@@ -8,25 +8,25 @@ from typing import Dict, List, Optional
 
 from rapidfuzz import fuzz, process
 
-from mock_ai import MockAIAnchorAnalyzer
+from mock_ai import MockAIBeliefAnalyzer
 
 
 TOP_SEMANTIC_CANDIDATES = 10
 
 
-def find_anchor_market_semantic(
+def find_belief_market_semantic(
     markets: List[Dict],
     thesis_keyword: str,
-    ai_analyzer: MockAIAnchorAnalyzer
+    ai_analyzer: MockAIBeliefAnalyzer
 ) -> Optional[Dict]:
     """
     Find the most semantically aligned market matching the thesis keyword.
-    
+
     Two-step process:
     1. Broad Search: Use fuzzy matching to get top 10 candidates
     2. Semantic Filtering: Use MockAI to find the best intent-aligned match
-    
-    Returns the anchor market with the correct token_id (YES or NO) selected
+
+    Returns the belief market with the correct token_id (YES or NO) selected
     based on semantic alignment.
     """
     print(f"\n-> [STEP 1] Broad fuzzy search for '{thesis_keyword}'...")
@@ -55,7 +55,7 @@ def find_anchor_market_semantic(
     # Step 2: Semantic filtering
     print(f"\n-> [STEP 2] Semantic intent alignment analysis...")
 
-    best_anchor = None
+    best_belief = None
     best_score = -1.0
 
     for matched_text, fuzzy_score, idx in candidates:
@@ -81,19 +81,20 @@ def find_anchor_market_semantic(
 
         if combined_score > best_score:
             best_score = combined_score
-            best_anchor = market.copy()
+            best_belief = market.copy()
             # Override token_id with semantically-selected token
-            best_anchor['token_id'] = analysis['recommended_token_id']
-            best_anchor['semantic_analysis'] = analysis
+            best_belief['token_id'] = analysis['recommended_token_id']
+            best_belief['semantic_analysis'] = analysis
 
-    if best_anchor is None:
-        print(f"   [ERROR] No anchor market selected")
+    if best_belief is None:
+        print(f"   [ERROR] No belief market selected")
         return None
 
-    print(f"\n   ✓ ANCHOR SELECTED:")
-    print(f"      Market: {best_anchor['question'][:80]}...")
-    print(f"      Token: {best_anchor['semantic_analysis']['token_choice']} ({best_anchor['token_id'][:20]}...)")
-    print(f"      Volume: ${best_anchor['volume_usd']:,.2f}")
+    print(f"\n   ✓ BELIEF SELECTED:")
+    print(f"      Market: {best_belief['question'][:80]}...")
+    print(f"      Token: {best_belief['semantic_analysis']['token_choice']} ({best_belief['token_id'][:20]}...)")
+    print(f"      Volume: ${best_belief['volume_usd']:,.2f}")
     print(f"      Confidence: {best_score:.1%}")
 
-    return best_anchor
+    return best_belief
+

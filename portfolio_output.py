@@ -11,7 +11,7 @@ import pandas as pd
 
 def print_portfolio_table(
     portfolio_df: pd.DataFrame,
-    anchor: Dict,
+    belief: Dict,
     thesis: str
 ) -> None:
     """
@@ -20,11 +20,11 @@ def print_portfolio_table(
     print("\n" + "=" * 100)
     print(f"THEMATIC QUANT FUND: '{thesis.upper()}' BASKET (SEMANTIC AI-ENHANCED)")
     print("=" * 100)
-    print(f"\nANCHOR ASSET (Market Proxy with Semantic Validation):")
-    print(f"  {anchor['question'][:90]}")
-    print(f"  Token: {anchor['token_id'][:20]}...  |  Volume: ${anchor['volume_usd']:,.2f}")
-    if 'semantic_analysis' in anchor:
-        print(f"  Intent Match: {anchor['semantic_analysis']['reasoning']}")
+    print(f"\nBELIEF MARKET (Market Proxy with Semantic Validation):")
+    print(f"  {belief['question'][:90]}")
+    print(f"  Token: {belief['token_id'][:20]}...  |  Volume: ${belief['volume_usd']:,.2f}")
+    if 'semantic_analysis' in belief:
+        print(f"  Intent Match: {belief['semantic_analysis']['reasoning']}")
     print("\n" + "-" * 100)
     print(f"{'CORR':>8}  {'ACTION':^10}  {'WEIGHT':>8}  {'N':>4}  {'MARKET QUESTION':<60}")
     print("-" * 100)
@@ -52,7 +52,7 @@ def print_portfolio_table(
 
 def save_portfolio_csv(
     portfolio_df: pd.DataFrame,
-    anchor: Dict,
+    belief: Dict,
     thesis: str
 ) -> str:
     """
@@ -63,21 +63,21 @@ def save_portfolio_csv(
     safe_thesis = "".join(c if c.isalnum() else "_" for c in thesis.lower())
     filename = f"quant_basket_{safe_thesis}_semantic.csv"
 
-    # Add anchor info to output
+    # Add belief info to output
     output_df = portfolio_df.copy()
-    output_df['anchor_question'] = anchor['question']
-    output_df['anchor_token_id'] = anchor['token_id']
+    output_df['belief_question'] = belief['question']
+    output_df['belief_token_id'] = belief['token_id']
     output_df['thesis'] = thesis
     
-    if 'semantic_analysis' in anchor:
-        output_df['anchor_semantic_alignment'] = anchor['semantic_analysis']['alignment_score']
-        output_df['anchor_intent_match'] = anchor['semantic_analysis']['reasoning']
+    if 'semantic_analysis' in belief:
+        output_df['belief_semantic_alignment'] = belief['semantic_analysis']['alignment_score']
+        output_df['belief_intent_match'] = belief['semantic_analysis']['reasoning']
 
     # Reorder columns for clarity
     cols = [
         'thesis', 'correlation', 'action', 'weight_pct', 'n_data_points',
-        'question', 'token_id', 'volume_usd', 'anchor_question', 'anchor_token_id',
-        'anchor_semantic_alignment', 'anchor_intent_match'
+        'question', 'token_id', 'volume_usd',
+        'belief_question', 'belief_token_id', 'belief_semantic_alignment', 'belief_intent_match'
     ]
     output_df = output_df[[c for c in cols if c in output_df.columns]]
 

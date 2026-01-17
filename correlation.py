@@ -16,11 +16,11 @@ CORRELATION_THRESHOLD_NEGATIVE = -0.65
 
 
 def compute_correlation_matrix(
-    anchor_series: pd.Series,
+    belief_series: pd.Series,
     candidate_series: Dict[str, pd.Series]
 ) -> pd.DataFrame:
     """
-    Compute Pearson correlation between anchor and all candidates.
+    Compute Pearson correlation between belief market and all candidates.
     Uses inner join to align timestamps - only days present in BOTH series are used.
 
     Returns DataFrame with columns: [token_id, correlation, n_points]
@@ -30,7 +30,7 @@ def compute_correlation_matrix(
     for token_id, series in candidate_series.items():
         # CRITICAL: Align time series using inner join
         # This ensures correlation is only computed on overlapping dates
-        aligned = pd.concat([anchor_series, series], axis=1, join='inner')
+        aligned = pd.concat([belief_series, series], axis=1, join='inner')
 
         n_points = len(aligned)
 
@@ -39,23 +39,23 @@ def compute_correlation_matrix(
             continue
 
         # Extract aligned values
-        anchor_vals = aligned.iloc[:, 0].values
+        belief_vals = aligned.iloc[:, 0].values
         candidate_vals = aligned.iloc[:, 1].values
 
         # Compute Pearson correlation coefficient
         # Using numpy for explicit control: r = cov(X,Y) / (std(X) * std(Y))
-        anchor_mean = np.mean(anchor_vals)
+        belief_mean = np.mean(belief_vals)
         candidate_mean = np.mean(candidate_vals)
 
-        anchor_std = np.std(anchor_vals, ddof=1)
+        belief_std = np.std(belief_vals, ddof=1)
         candidate_std = np.std(candidate_vals, ddof=1)
 
         # Handle zero variance (constant prices)
-        if anchor_std == 0 or candidate_std == 0:
+        if belief_std == 0 or candidate_std == 0:
             continue
 
-        covariance = np.mean((anchor_vals - anchor_mean) * (candidate_vals - candidate_mean))
-        correlation = covariance / (anchor_std * candidate_std)
+        covariance = np.mean((belief_vals - belief_mean) * (candidate_vals - candidate_mean))
+        correlation = covariance / (belief_std * candidate_std)
 
         # Validate correlation is in valid range
         correlation = np.clip(correlation, -1.0, 1.0)

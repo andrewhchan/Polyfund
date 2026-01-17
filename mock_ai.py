@@ -1,7 +1,7 @@
 """
-MockAI Anchor Analyzer Module
+MockAI Belief Analyzer Module
 =============================
-Provides semantic intent analysis for market anchor selection.
+Provides semantic intent analysis for market belief selection.
 
 This module simulates an AI agent that understands semantic intent alignment
 between a user's thesis and market questions. It can be easily replaced with
@@ -11,7 +11,7 @@ a real OpenAI/Claude API call later.
 from typing import Dict
 
 
-class MockAIAnchorAnalyzer:
+class MockAIBeliefAnalyzer:
     """
     Simulates an AI agent that understands semantic intent alignment.
     
@@ -56,7 +56,7 @@ class MockAIAnchorAnalyzer:
         thesis_lower = user_thesis.lower()
         detected = {}
 
-        for intent_type, keywords in MockAIAnchorAnalyzer.INTENT_KEYWORDS.items():
+        for intent_type, keywords in MockAIBeliefAnalyzer.INTENT_KEYWORDS.items():
             detected[intent_type] = any(kw in thesis_lower for kw in keywords)
 
         return detected
@@ -80,8 +80,8 @@ class MockAIAnchorAnalyzer:
             market_question: Market question text (e.g., "Will Trump win election?")
             use_yes_token: Whether we're evaluating the YES token (True) or NO token (False)
         """
-        user_intent = MockAIAnchorAnalyzer.extract_intent(user_thesis)
-        question_intent = MockAIAnchorAnalyzer.extract_intent(market_question)
+        user_intent = MockAIBeliefAnalyzer.extract_intent(user_thesis)
+        question_intent = MockAIBeliefAnalyzer.extract_intent(market_question)
 
         # Determine if user believes in positive or negative outcome
         user_positive = sum([user_intent.get('win', False), 
@@ -190,3 +190,4 @@ class MockAIAnchorAnalyzer:
             'token_choice': token_choice,
             'reasoning': reasoning
         }
+
