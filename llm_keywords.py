@@ -16,11 +16,19 @@ def generate_keywords(query: str) -> List[str]:
 
 def _generate_with_gemini(query: str) -> List[str]:
     api_key = os.environ["GEMINI_API_KEY"]
-    model = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
+    model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash-lite")
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
     prompt = (
-        "Given the user query, output JSON array of 3-6 distinct search terms to find relevant prediction markets. "
-        "Be specific; include entities, metrics, and event synonyms. Output only JSON.\n\n"
+        "Given the user query, output a JSON array of 3-6 SHORT search keywords (1-2 words each) "
+        "to find relevant prediction markets in a database. Keep keywords simple for substring matching.\n\n"
+        "IMPORTANT: Keywords must stay specific to the main subject. Don't use generic terms alone.\n"
+        "- GOOD: 'Trump election', 'Trump president' (tied to subject)\n"
+        "- BAD: 'election', 'president' (too generic, could match anything)\n\n"
+        "Examples:\n"
+        "- 'Lakers good season' -> [\"Lakers\", \"Lakers championship\", \"Lakers playoff\", \"LeBron Lakers\"]\n"
+        "- 'Trump wins election' -> [\"Trump\", \"Trump election\", \"Trump president\", \"Trump 2024\"]\n"
+        "- 'Bitcoin above 100k' -> [\"Bitcoin\", \"Bitcoin price\", \"BTC\", \"Bitcoin 100000\"]\n\n"
+        "Output only JSON array of strings.\n"
         f"User query: {query}"
     )
     payload = {"contents": [{"parts": [{"text": prompt}]}]}

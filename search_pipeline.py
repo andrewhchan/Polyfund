@@ -9,6 +9,63 @@ from llm_proxy import generate_proxy_theses
 KEYWORD_MATCH_THRESHOLD = 70
 
 
+def query_markets_by_keywords(
+    keywords: List[str],
+    limit: int = 100
+) -> List[Dict[str, Any]]:
+    """
+    Query markets table using Supabase ilike search on question/event_title.
+
+    Args:
+        keywords: List of search keywords
+        limit: Maximum results per keyword
+
+    Returns:
+        List of market dicts, deduplicated and sorted by volume
+    """
+    client = get_supabase()
+    if not client:
+        return []
+
+    results: Dict[str, Dict[str, Any]] = {}
+
+    for kw in keywords:
+        try:
+            resp = (
+                client.table("markets")
+                .select(
+                    "condition_id,question,event_title,status,volume_usd,yes_token_id,no_token_id,token_id,outcome_yes_price"
+                )
+                .or_(f"question.ilike.%{kw}%,event_title.ilike.%{kw}%")
+                .eq("status", "open")
+                .order("volume_usd", desc=True)
+                .limit(limit)
+                .execute()
+            )
+        except Exception:
+            continue
+
+        data = getattr(resp, "data", None) or []
+        for r in data:
+            cid = r.get("condition_id")
+            if not cid or cid in results:
+                continue
+            results[cid] = {
+                "condition_id": cid,
+                "question": r.get("question"),
+                "event_title": r.get("event_title"),
+                "status": r.get("status"),
+                "volume_usd": float(r.get("volume_usd") or 0),
+                "yes_token_id": r.get("yes_token_id"),
+                "no_token_id": r.get("no_token_id"),
+                "token_id": r.get("token_id") or r.get("yes_token_id"),
+                "outcome_yes_price": float(r.get("outcome_yes_price") or 0.5),
+            }
+
+    # Sort by volume and return
+    return sorted(results.values(), key=lambda x: x.get("volume_usd", 0), reverse=True)
+
+
 def discover_markets(
     query: str,
     k: int = 30,
@@ -82,24 +139,22 @@ def discover_markets(
 
 def _search_supabase_markets(client, keywords: List[str], k: int) -> Tuple[Dict[str, Dict[str, Any]], Dict[str, int]]:
     """
-    Search Supabase 'markets' table using ilike on question/event_title.
+    Search Supabase 'markets' table using full-text search on tsvector index.
+    Uses optimized SQL with GIN index for better performance on large result sets.
     """
     results: Dict[str, Dict[str, Any]] = {}
     counts = {"total_found": 0, "deduped": 0}
 
     for kw in keywords:
         try:
-            resp = (
-                client.table("markets")
-                .select(
-                    "condition_id,question,event_title,status,end_date,volume_usd,yes_token_id,no_token_id,token_id,outcome_yes_price"
-                )
-                .or_(f"question.ilike.%{kw}%,event_title.ilike.%{kw}%")
-                .eq("status", "open")
-                .order("volume_usd", desc=True)
-                .limit(k)
-                .execute()
-            )
+            # Use RPC to call optimized SQL search
+            resp = client.rpc(
+                "search_markets_by_keyword",
+                {
+                    "p_keyword": kw,
+                    "p_limit": k
+                }
+            ).execute()
         except Exception:
             continue
 

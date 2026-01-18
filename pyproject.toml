@@ -20,8 +20,8 @@ dependencies = [
   "fastapi>=0.110",
   "uvicorn>=0.29",
   "supabase>=2.4",
-  "google-genai>=0.5"
-
+  "google-genai>=0.5",
+  "python-dotenv>=1.2.1",
 ]
 
 [tool.setuptools]

@@ -11,11 +11,8 @@ def get_supabase() -> Optional[Client]:
     Prefers SUPABASE_SERVICE_ROLE_KEY, falls back to SUPABASE_SECRET_KEY or SUPABASE_KEY.
     """
     url = os.getenv("SUPABASE_URL")
-    key = (
-        os.getenv("SUPABASE_SERVICE_ROLE_KEY")
-        or os.getenv("SUPABASE_SECRET_KEY")
-        or os.getenv("SUPABASE_KEY")
-    )
+    key = os.getenv("SUPABASE_SECRET_KEY")
+    
     print(f"Supabase URL: {url}, Key present: {key is not None}")
     if not url or not key:
         return None

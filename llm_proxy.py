@@ -17,7 +17,7 @@ def generate_proxy_theses(thesis: str) -> List[str]:
 
 def _generate_gemini(thesis: str) -> List[str]:
     api_key = os.environ["GEMINI_API_KEY"]
-    model = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
+    model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash-lite")
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
     prompt = (
         "Given a user thesis with no obvious market matches, propose exactly 5 alternative proxy theses "

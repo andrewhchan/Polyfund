@@ -17,8 +17,13 @@ Usage:
     python main.py "Bitcoin above 100k"
 """
 
+# Load .env before any other imports
+from dotenv import load_dotenv
+load_dotenv()
+
 import argparse
 import sys
+
 from typing import Optional
 
 import pandas as pd
@@ -26,12 +31,13 @@ import pandas as pd
 from llm_keywords import generate_keywords
 from llm_proxy import generate_proxy_theses
 from search_pipeline import query_markets_by_keywords
-from market_data import fetch_price_history, HISTORY_DAYS, TOP_N_LIQUID_MARKETS
+from market_data import fetch_price_history, fetch_price_history_batch, HISTORY_DAYS
 from belief_selection import select_anchor_market, AnchorMarket
 from correlation import compute_correlation_matrix, generate_signals, construct_portfolio, MIN_OVERLAPPING_DAYS
 from portfolio_output import print_portfolio_table, save_portfolio_csv
 
 CONFIDENCE_THRESHOLD = 0.90
+MAX_MARKETS_PER_QUERY = 1000  # Max markets to fetch from DB per keyword
 
 
 def run_quant_fund(thesis: str) -> Optional[pd.DataFrame]:
@@ -66,7 +72,7 @@ def run_quant_fund(thesis: str) -> Optional[pd.DataFrame]:
 
     # Step 2: Query DB for markets
     print(f"\n-> [STEP 2] Querying database for markets...")
-    markets = query_markets_by_keywords(keywords, limit=TOP_N_LIQUID_MARKETS)
+    markets = query_markets_by_keywords(keywords, limit=MAX_MARKETS_PER_QUERY)
 
     if not markets:
         print("[ERROR] No markets found in database matching keywords")
@@ -99,7 +105,7 @@ def run_quant_fund(thesis: str) -> Optional[pd.DataFrame]:
         print(f"   Alternative keywords: {alt_keywords}")
 
         # Query DB with alternative keywords
-        markets = query_markets_by_keywords(alt_keywords, limit=TOP_N_LIQUID_MARKETS)
+        markets = query_markets_by_keywords(alt_keywords, limit=MAX_MARKETS_PER_QUERY)
 
         if markets:
             print(f"   Found {len(markets)} markets with alternative keywords")
@@ -134,30 +140,40 @@ def run_quant_fund(thesis: str) -> Optional[pd.DataFrame]:
     print(f"   Anchor has {len(anchor_series)} daily price points")
 
     # Step 6: Fetch price history for all candidates (excluding anchor)
-    print(f"\n-> [STEP 6] Fetching price history for candidate markets...")
-    candidate_series = {}
-    fetched = 0
-    failed = 0
-
-    for i, market in enumerate(markets):
-        # Skip the anchor itself (check both yes and no token)
+    print(f"\n-> [STEP 6] Fetching price history for candidate markets (parallel)...")
+    
+    # Filter out anchor from candidates
+    candidate_tokens = []
+    for market in markets:
         if market['yes_token_id'] == anchor.token_id:
             continue
         if market.get('no_token_id') == anchor.token_id:
             continue
-
-        # Fetch price history for YES token
-        series = fetch_price_history(market['yes_token_id'], days=HISTORY_DAYS)
-
+        candidate_tokens.append(market['yes_token_id'])
+    
+    # Fetch all in parallel with progress callback
+    def progress_update(completed, total):
+        if completed % 20 == 0:
+            print(f"   Processed {completed}/{total} markets...")
+    
+    batch_results = fetch_price_history_batch(
+        candidate_tokens,
+        days=HISTORY_DAYS,
+        max_workers=16,
+        progress_callback=progress_update
+    )
+    
+    # Filter valid results
+    candidate_series = {}
+    fetched = 0
+    failed = 0
+    
+    for token_id, series in batch_results.items():
         if series is not None and len(series) >= MIN_OVERLAPPING_DAYS:
-            candidate_series[market['yes_token_id']] = series
+            candidate_series[token_id] = series
             fetched += 1
         else:
             failed += 1
-
-        # Progress indicator
-        if (i + 1) % 20 == 0:
-            print(f"   Processed {i + 1}/{len(markets)} markets...")
 
     print(f"   Successfully fetched history for {fetched} markets ({failed} failed/insufficient)")
 
