@@ -1,99 +1,154 @@
 """
-Anchor Market Selection Module
-===============================
-Two-step process: broad fuzzy search + semantic filtering via MockAI.
+Anchor Market Selection Module (AI-Powered)
+============================================
+Uses AI to identify the best numerical proxy market for a user's abstract thesis.
+
+Hybrid approach: Fuzzy filter first to find relevant markets, then AI picks best anchor.
 """
 
+from dataclasses import dataclass
 from typing import Dict, List, Optional
 
 from rapidfuzz import fuzz, process
 
-from mock_ai import MockAIAnchorAnalyzer
+from ai_client import AIClient, AnchorSelectionResult, AIClientError
 
 
-TOP_SEMANTIC_CANDIDATES = 10
+FUZZY_CANDIDATES_LIMIT = 50  # Max markets to send to AI after fuzzy filter
+FUZZY_SCORE_CUTOFF = 30      # Minimum fuzzy match score (lower = more inclusive)
 
 
-def find_anchor_market_semantic(
+@dataclass
+class AnchorMarket:
+    """Selected anchor market with token choice."""
+    market: Dict  # Full market data
+    token_id: str  # Selected token (YES or NO)
+    token_choice: str  # "YES" or "NO"
+    reasoning: str
+    confidence: float
+
+
+def _fuzzy_filter_markets(
     markets: List[Dict],
-    thesis_keyword: str,
-    ai_analyzer: MockAIAnchorAnalyzer
-) -> Optional[Dict]:
+    user_thesis: str
+) -> List[Dict]:
     """
-    Find the most semantically aligned market matching the thesis keyword.
-    
-    Two-step process:
-    1. Broad Search: Use fuzzy matching to get top 10 candidates
-    2. Semantic Filtering: Use MockAI to find the best intent-aligned match
-    
-    Returns the anchor market with the correct token_id (YES or NO) selected
-    based on semantic alignment.
+    Use fuzzy matching to filter markets relevant to the user's thesis.
+
+    Args:
+        markets: Full list of available markets
+        user_thesis: User's abstract belief/thesis
+
+    Returns:
+        Filtered list of markets (max FUZZY_CANDIDATES_LIMIT)
     """
-    print(f"\n-> [STEP 1] Broad fuzzy search for '{thesis_keyword}'...")
+    if len(markets) <= FUZZY_CANDIDATES_LIMIT:
+        return markets
 
-    # Build search corpus
-    search_texts = []
-    for m in markets:
-        combined = f"{m['question']} {m['event_title']}".lower()
-        search_texts.append(combined)
+    # Create search text for each market (question + event title)
+    search_texts = [
+        f"{m.get('question', '')} {m.get('event_title', '')}".lower()
+        for m in markets
+    ]
 
-    # Get top 10 fuzzy matches
-    candidates = process.extract(
-        thesis_keyword.lower(),
+    # Find fuzzy matches
+    matches = process.extract(
+        user_thesis.lower(),
         search_texts,
         scorer=fuzz.partial_ratio,
-        limit=TOP_SEMANTIC_CANDIDATES,
-        score_cutoff=40  # Lower threshold to get more candidates for semantic filtering
+        limit=FUZZY_CANDIDATES_LIMIT,
+        score_cutoff=FUZZY_SCORE_CUTOFF
     )
 
-    if not candidates:
-        print(f"   [ERROR] No markets found matching '{thesis_keyword}'")
+    if not matches:
+        # If no matches above cutoff, return top markets by volume as fallback
+        print(f"   [FUZZY] No matches above score cutoff, using top {FUZZY_CANDIDATES_LIMIT} by volume")
+        return markets[:FUZZY_CANDIDATES_LIMIT]
+
+    # Get matched markets (matches returns tuples of (match_text, score, index))
+    filtered_markets = [markets[idx] for _, _, idx in matches]
+
+    return filtered_markets
+
+
+def select_anchor_market(
+    markets: List[Dict],
+    user_thesis: str,
+    ai_client: Optional[AIClient] = None
+) -> Optional[AnchorMarket]:
+    """
+    Select the best anchor market using hybrid fuzzy + AI approach.
+
+    Flow:
+    1. Fuzzy filter: Reduce large market pool to ~50 relevant candidates
+    2. AI selection: Send filtered candidates to AI for semantic analysis
+
+    Args:
+        markets: List of all available markets (should include question,
+                 yes_token_id, no_token_id, volume_usd)
+        user_thesis: User's abstract belief/thesis (e.g., "Lakers good season")
+        ai_client: AIClient instance (creates default if None)
+
+    Returns:
+        AnchorMarket with selected market and token choice, or None if selection fails
+    """
+    if not markets:
+        print("[ERROR] No markets provided for anchor selection")
         return None
 
-    print(f"   Found {len(candidates)} fuzzy matches. Moving to semantic analysis...")
+    print(f"\n-> [AI ANCHOR SELECTION] Analyzing markets...")
+    print(f"   Thesis: \"{user_thesis}\"")
+    print(f"   Total markets pool: {len(markets)}")
 
-    # Step 2: Semantic filtering
-    print(f"\n-> [STEP 2] Semantic intent alignment analysis...")
+    # Step 1: Fuzzy filter to find relevant markets
+    filtered_markets = _fuzzy_filter_markets(markets, user_thesis)
+    print(f"   [FUZZY] Filtered to {len(filtered_markets)} candidate markets")
 
-    best_anchor = None
-    best_score = -1.0
+    # Create AI client if not provided
+    if ai_client is None:
+        try:
+            ai_client = AIClient()
+        except AIClientError as e:
+            print(f"   [ERROR] Failed to initialize AI client: {e}")
+            return None
 
-    for matched_text, fuzzy_score, idx in candidates:
-        market = markets[idx]
-        
-        # Run semantic analysis
-        analysis = ai_analyzer.analyze_candidate(
-            user_thesis=thesis_keyword,
-            market_question=market['question'],
-            yes_token_id=market['yes_token_id'],
-            no_token_id=market.get('no_token_id')
-        )
-
-        alignment_score = analysis['alignment_score']
-
-        # Combine fuzzy score (0-100) with semantic alignment (0-1)
-        # Weight: 40% fuzzy matching, 60% semantic alignment
-        combined_score = (fuzzy_score / 100.0) * 0.4 + alignment_score * 0.6
-
-        print(f"   Candidate: {market['question'][:70]}...")
-        print(f"      Fuzzy: {fuzzy_score:.0f}% | Semantic: {alignment_score:.2f} | Combined: {combined_score:.3f}")
-        print(f"      Decision: {analysis['token_choice']} token | {analysis['reasoning']}")
-
-        if combined_score > best_score:
-            best_score = combined_score
-            best_anchor = market.copy()
-            # Override token_id with semantically-selected token
-            best_anchor['token_id'] = analysis['recommended_token_id']
-            best_anchor['semantic_analysis'] = analysis
-
-    if best_anchor is None:
-        print(f"   [ERROR] No anchor market selected")
+    # Step 2: Call AI to select anchor from filtered candidates
+    try:
+        result: AnchorSelectionResult = ai_client.select_anchor(user_thesis, filtered_markets)
+    except AIClientError as e:
+        print(f"   [ERROR] AI selection failed: {e}")
         return None
 
-    print(f"\n   ✓ ANCHOR SELECTED:")
-    print(f"      Market: {best_anchor['question'][:80]}...")
-    print(f"      Token: {best_anchor['semantic_analysis']['token_choice']} ({best_anchor['token_id'][:20]}...)")
-    print(f"      Volume: ${best_anchor['volume_usd']:,.2f}")
-    print(f"      Confidence: {best_score:.1%}")
+    # Build anchor market from result
+    selected_market = filtered_markets[result.market_index]
+    anchor = _build_anchor_from_result(result, selected_market)
 
-    return best_anchor
+    print(f"\n   [AI SELECTED ANCHOR]")
+    print(f"   Market: {selected_market['question'][:80]}...")
+    print(f"   Token: {anchor.token_choice}")
+    print(f"   Confidence: {anchor.confidence:.0%}")
+    print(f"   Reasoning: {anchor.reasoning}")
+
+    return anchor
+
+
+def _build_anchor_from_result(
+    result: AnchorSelectionResult,
+    market: Dict
+) -> AnchorMarket:
+    """
+    Convert AI result into AnchorMarket object with correct token_id.
+    """
+    # Get the correct token ID based on YES/NO choice
+    if result.token_choice == "YES":
+        token_id = market.get("yes_token_id") or market.get("token_id")
+    else:
+        token_id = market.get("no_token_id") or market.get("yes_token_id") or market.get("token_id")
+
+    return AnchorMarket(
+        market=market,
+        token_id=token_id,
+        token_choice=result.token_choice,
+        reasoning=result.reasoning,
+        confidence=result.confidence
+    )

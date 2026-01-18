@@ -17,7 +17,7 @@ POLY_GAMMA_API = 'https://gamma-api.polymarket.com'
 POLY_CLOB_API = 'https://clob.polymarket.com'
 
 HISTORY_DAYS = 30
-TOP_N_LIQUID_MARKETS = 100
+TOP_N_LIQUID_MARKETS = 500
 
 
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
@@ -71,6 +71,21 @@ def fetch_polymarket_markets(limit: int = TOP_N_LIQUID_MARKETS) -> List[Dict]:
 
                 volume = float(market.get('volume', market.get('volumeNum', 0)))
 
+                # Parse outcome price safely
+                try:
+                    outcome_prices = market.get('outcomePrices')
+                    if outcome_prices:
+                        # Handle both list and string formats
+                        if isinstance(outcome_prices, str):
+                            parsed = json.loads(outcome_prices)
+                        else:
+                            parsed = outcome_prices
+                        outcome_yes_price = float(parsed[0]) if parsed else 0.5
+                    else:
+                        outcome_yes_price = 0.5
+                except (ValueError, IndexError, TypeError, json.JSONDecodeError):
+                    outcome_yes_price = 0.5
+
                 all_markets.append({
                     'condition_id': condition_id,
                     'yes_token_id': yes_token_id,
@@ -79,7 +94,7 @@ def fetch_polymarket_markets(limit: int = TOP_N_LIQUID_MARKETS) -> List[Dict]:
                     'question': market.get('question', ''),
                     'event_title': event.get('title', ''),
                     'volume_usd': volume,
-                    'outcome_yes_price': float(market.get('outcomePrices', '[0.5]').strip('[]').split(',')[0]) if market.get('outcomePrices') else 0.5
+                    'outcome_yes_price': outcome_yes_price
                 })
 
         offset += api_limit
