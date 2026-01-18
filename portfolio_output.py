@@ -22,13 +22,16 @@ def print_portfolio_table(
     Print a professional console table of the portfolio.
     """
     print("\n" + "=" * 100)
-    print(f"THEMATIC QUANT FUND: '{thesis.upper()}' BASKET (SEMANTIC AI-ENHANCED)")
+    print(f"THEMATIC QUANT FUND: '{thesis.upper()}' BASKET (AI-POWERED)")
     print("=" * 100)
-    print(f"\nBELIEF MARKET (Market Proxy with Semantic Validation):")
-    print(f"  {belief['question'][:90]}")
-    print(f"  Token: {belief['token_id'][:20]}...  |  Volume: ${belief['volume_usd']:,.2f}")
-    if 'semantic_analysis' in belief:
-        print(f"  Intent Match: {belief['semantic_analysis']['reasoning']}")
+    print(f"\nANCHOR ASSET (AI-Selected Numerical Proxy):")
+    print(f"  {anchor['question'][:90]}")
+    print(f"  Token: {anchor.get('token_choice', 'YES')} ({anchor['token_id'][:20]}...)")
+    print(f"  Volume: ${anchor['volume_usd']:,.2f}")
+    if 'ai_reasoning' in anchor:
+        print(f"  AI Reasoning: {anchor['ai_reasoning']}")
+    if 'ai_confidence' in anchor:
+        print(f"  AI Confidence: {anchor['ai_confidence']:.0%}")
     print("\n" + "-" * 100)
     print(f"{'CORR':>8}  {'ACTION':^10}  {'WEIGHT':>8}  {'N':>4}  {'MARKET QUESTION':<60}")
     print("-" * 100)
@@ -65,23 +68,25 @@ def save_portfolio_csv(
     """
     # Sanitize thesis for filename
     safe_thesis = "".join(c if c.isalnum() else "_" for c in thesis.lower())
-    filename = f"quant_basket_{safe_thesis}_semantic.csv"
+    filename = f"quant_basket_{safe_thesis}_ai.csv"
 
     # Add belief info to output
     output_df = portfolio_df.copy()
-    output_df['belief_question'] = belief['question']
-    output_df['belief_token_id'] = belief['token_id']
+    output_df['anchor_question'] = anchor['question']
+    output_df['anchor_token_id'] = anchor['token_id']
+    output_df['anchor_token_choice'] = anchor.get('token_choice', 'YES')
     output_df['thesis'] = thesis
-    
-    if 'semantic_analysis' in belief:
-        output_df['belief_semantic_alignment'] = belief['semantic_analysis']['alignment_score']
-        output_df['belief_intent_match'] = belief['semantic_analysis']['reasoning']
+
+    if 'ai_reasoning' in anchor:
+        output_df['anchor_ai_reasoning'] = anchor['ai_reasoning']
+    if 'ai_confidence' in anchor:
+        output_df['anchor_ai_confidence'] = anchor['ai_confidence']
 
     # Reorder columns for clarity
     cols = [
         'thesis', 'correlation', 'action', 'weight_pct', 'n_data_points',
-        'question', 'token_id', 'volume_usd',
-        'belief_question', 'belief_token_id', 'belief_semantic_alignment', 'belief_intent_match'
+        'question', 'token_id', 'volume_usd', 'anchor_question', 'anchor_token_id',
+        'anchor_token_choice', 'anchor_ai_reasoning', 'anchor_ai_confidence'
     ]
     output_df = output_df[[c for c in cols if c in output_df.columns]]
 
