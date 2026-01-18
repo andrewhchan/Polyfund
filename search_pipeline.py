@@ -3,6 +3,8 @@ from typing import Dict, List, Tuple, Any
 from rapidfuzz import fuzz
 
 from llm_proxy import generate_proxy_theses
+from db import get_engine
+from sqlalchemy import text
 
 KEYWORD_MATCH_THRESHOLD = 70
 
@@ -20,6 +22,11 @@ def discover_markets(
     seen = {}
     explain_filters = {"deduped": 0, "total_found": 0, "skipped_non_dict": 0}
     scored = []
+
+    # Optional DB-backed lookup
+    engine = get_engine()
+    if engine:
+        seen.update(_search_db_markets(engine, keywords, k))
 
     for kw in keywords:
         try:
@@ -79,7 +86,6 @@ def discover_markets(
             f"best_keyword_match >= {keyword_match_threshold} filter applied",
         ],
     }
-    # Fallback via LLM proxy theses if nothing passes threshold
     if allow_fallback and not working:
         proxy_theses = generate_proxy_theses(query)
         explain["fallback"] = {"proxy_theses": proxy_theses}
@@ -92,6 +98,45 @@ def discover_markets(
                     working.append(c)
         explain["returned"] = len(working)
     return working, explain
+
+
+def _search_db_markets(engine, keywords: List[str], k: int) -> Dict[str, Dict[str, Any]]:
+    """
+    Simple DB search using ILIKE over question/event_title with volume sorting.
+    Expects a 'markets' table as per README schema.
+    """
+    results: Dict[str, Dict[str, Any]] = {}
+    with engine.connect() as conn:
+        for kw in keywords:
+            kw_like = f"%{kw}%"
+            stmt = text(
+                """
+                SELECT condition_id, question, event_title, status, end_date, volume_usd,
+                       yes_token_id, no_token_id, token_id, outcome_yes_price
+                FROM markets
+                WHERE (question ILIKE :kw OR event_title ILIKE :kw) AND status = 'open'
+                ORDER BY volume_usd DESC
+                LIMIT :lim
+                """
+            )
+            rows = conn.execute(stmt, {"kw": kw_like, "lim": k}).mappings().all()
+            for r in rows:
+                cid = r["condition_id"]
+                if cid in results:
+                    continue
+                results[cid] = {
+                    "condition_id": cid,
+                    "question": r["question"],
+                    "event_title": r["event_title"],
+                    "status": r["status"],
+                    "end_date": r["end_date"],
+                    "volume_usd": float(r["volume_usd"] or 0),
+                    "yes_token_id": r["yes_token_id"],
+                    "no_token_id": r["no_token_id"],
+                    "token_id": r["token_id"] or r["yes_token_id"],
+                    "outcome_yes_price": float(r["outcome_yes_price"] or 0.5),
+                }
+    return results
 
 
 def _flatten_market(event: Dict[str, Any], market: Dict[str, Any]) -> Dict[str, Any]:
