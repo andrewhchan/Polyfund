@@ -35,7 +35,7 @@ class MockAIBeliefAnalyzer:
 
         # Negative outcomes
         'lose': ['lose', 'loses', 'losing', 'loss', 'defeat', 'fail', 'failure', 'negative', 'loose'],
-        'no': ['no', 'not', 'denial', 'false', 'won\'t', 'won't'],
+        'no': ['no', 'not', 'denial', 'false', "won't", "wont"],
         'low': ['low', 'decrease', 'fall', 'drop', 'weaken', 'below', 'lower'],
         'worst': ['worst', 'lowest', 'weakest', 'least', 'lagging'],
     }
@@ -190,4 +190,3 @@ class MockAIBeliefAnalyzer:
             'token_choice': token_choice,
             'reasoning': reasoning
         }
-

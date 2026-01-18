@@ -5,16 +5,17 @@ Handles API calls to Polymarket for market and price history data.
 """
 
 import json
+import os
 from datetime import datetime, timedelta, timezone
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Any
 
 import pandas as pd
 import requests
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 
-POLY_GAMMA_API = 'https://gamma-api.polymarket.com'
-POLY_CLOB_API = 'https://clob.polymarket.com'
+POLY_GAMMA_API = os.getenv('POLYMARKET_GAMMA_BASE_URL', 'https://gamma-api.polymarket.com')
+POLY_CLOB_API = os.getenv('POLYMARKET_CLOB_BASE_URL', 'https://clob.polymarket.com')
 
 HISTORY_DAYS = 30
 TOP_N_LIQUID_MARKETS = 100
@@ -92,6 +93,25 @@ def fetch_polymarket_markets(limit: int = TOP_N_LIQUID_MARKETS) -> List[Dict]:
 
     print(f"   Found {len(all_markets)} markets (sorted by volume)")
     return all_markets
+
+
+def search_polymarket_events(keyword: str, limit: int = 50) -> List[Dict[str, Any]]:
+    """
+    Search Polymarket Gamma public search endpoint for events by keyword.
+    """
+    params = {'q': keyword, 'limit': limit}
+    response = requests.get(f"{POLY_GAMMA_API}/public-search", params=params, timeout=15)
+    response.raise_for_status()
+    data = response.json()
+    if isinstance(data, dict):
+        if 'events' in data and isinstance(data['events'], list):
+            return data['events']
+        if 'data' in data and isinstance(data['data'], list):
+            return data['data']
+        return []
+    if isinstance(data, list):
+        return data
+    return []
 
 
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))

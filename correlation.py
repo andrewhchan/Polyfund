@@ -4,7 +4,7 @@ Correlation Analysis & Signal Generation Module
 Computes Pearson correlations and generates trading signals based on thresholds.
 """
 
-from typing import Dict, List
+from typing import Dict, List, Iterable
 
 import pandas as pd
 import numpy as np
@@ -140,3 +140,39 @@ def construct_portfolio(signals_df: pd.DataFrame) -> pd.DataFrame:
     signals_df = signals_df.sort_values('weight', ascending=False)
 
     return signals_df
+
+
+def compute_rolling_correlations(
+    belief_series: pd.Series,
+    candidate_series: Dict[str, pd.Series],
+    windows: Iterable[int]
+) -> Dict[int, pd.DataFrame]:
+    """
+    Compute rolling Pearson correlations between belief and candidates.
+
+    Returns dict keyed by window size (days), each value is a DataFrame with
+    columns: [date, token_id, correlation].
+    """
+    results: Dict[int, List[Dict[str, object]]] = {}
+
+    for window in windows:
+        window_rows: List[Dict[str, object]] = []
+
+        for token_id, series in candidate_series.items():
+            aligned = pd.concat([belief_series, series], axis=1, join='inner')
+            if len(aligned) < max(MIN_OVERLAPPING_DAYS, window):
+                continue
+
+            rolling_corr = aligned.iloc[:, 0].rolling(window=window).corr(aligned.iloc[:, 1])
+            rolling_corr = rolling_corr.dropna()
+
+            for idx, value in rolling_corr.items():
+                window_rows.append({
+                    'date': idx,
+                    'token_id': token_id,
+                    'correlation': float(np.clip(value, -1.0, 1.0))
+                })
+
+        results[window] = pd.DataFrame(window_rows)
+
+    return results

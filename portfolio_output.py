@@ -4,9 +4,13 @@ Portfolio Output & Formatting Module
 Handles console output and CSV export for portfolio results.
 """
 
-from typing import Dict
+from typing import Dict, Iterable
+import json
+from datetime import datetime, timezone
 
 import pandas as pd
+
+from correlation import compute_rolling_correlations
 
 
 def print_portfolio_table(
@@ -84,4 +88,114 @@ def save_portfolio_csv(
     output_df.to_csv(filename, index=False)
     print(f"\nSaved portfolio to: {filename}")
 
+    return filename
+
+
+def _series_to_points(series: pd.Series) -> list:
+    return [
+        {'date': idx.date().isoformat() if hasattr(idx, 'date') else str(idx), 'value': float(val)}
+        for idx, val in series.items()
+    ]
+
+
+def _compute_position_pnl_series(series: pd.Series, action: str) -> pd.Series:
+    if series.empty:
+        return series
+
+    if action == 'BUY NO':
+        series = 1.0 - series
+
+    entry_price = float(series.iloc[0])
+    if entry_price == 0:
+        return pd.Series(dtype=float)
+
+    pnl = (series / entry_price) - 1.0
+    return pnl
+
+
+def save_portfolio_json(
+    portfolio_df: pd.DataFrame,
+    belief: Dict,
+    thesis: str,
+    belief_series: pd.Series,
+    candidate_series: Dict[str, pd.Series],
+    windows: Iterable[int] = (7, 14, 30)
+) -> str:
+    """
+    Save time-series analytics to JSON for visualization.
+    Includes rolling correlations, price paths, and PnL curves.
+    """
+    safe_thesis = "".join(c if c.isalnum() else "_" for c in thesis.lower())
+    filename = f"quant_basket_{safe_thesis}_timeseries.json"
+
+    rolling = compute_rolling_correlations(belief_series, candidate_series, windows)
+
+    price_series = {
+        'belief': _series_to_points(belief_series),
+        'candidates': {
+            token_id: _series_to_points(series) for token_id, series in candidate_series.items()
+        }
+    }
+
+    position_pnls = {}
+    pnl_frames = []
+    weights = {}
+
+    for _, row in portfolio_df.iterrows():
+        token_id = row['token_id']
+        action = row['action']
+        weight = float(row['weight']) if 'weight' in row else 0.0
+        weights[token_id] = weight
+
+        series = candidate_series.get(token_id)
+        if series is None or series.empty:
+            continue
+
+        pnl_series = _compute_position_pnl_series(series, action)
+        if pnl_series.empty:
+            continue
+
+        position_pnls[token_id] = _series_to_points(pnl_series)
+        pnl_frames.append(pnl_series.rename(token_id))
+
+    if pnl_frames:
+        pnl_df = pd.concat(pnl_frames, axis=1, join='outer').sort_index()
+        pnl_df = pnl_df.ffill().fillna(0.0)
+        weighted = pnl_df.mul(pd.Series(weights), axis=1)
+        portfolio_pnl = weighted.sum(axis=1)
+        portfolio_pnl_points = _series_to_points(portfolio_pnl)
+    else:
+        portfolio_pnl_points = []
+
+    rolling_json = {
+        str(window): [
+            {
+                'date': row['date'].date().isoformat() if hasattr(row['date'], 'date') else str(row['date']),
+                'token_id': row['token_id'],
+                'correlation': row['correlation']
+            }
+            for _, row in df.iterrows()
+        ]
+        for window, df in rolling.items()
+    }
+
+    payload = {
+        'metadata': {
+            'thesis': thesis,
+            'belief_token_id': belief.get('token_id'),
+            'generated_at': datetime.now(timezone.utc).isoformat(),
+            'rolling_windows_days': [int(w) for w in windows]
+        },
+        'price_series': price_series,
+        'rolling_correlations': rolling_json,
+        'pnl_curves': {
+            'portfolio': portfolio_pnl_points,
+            'positions': position_pnls
+        }
+    }
+
+    with open(filename, 'w', encoding='utf-8') as f:
+        json.dump(payload, f, indent=2)
+
+    print(f"\nSaved time-series JSON to: {filename}")
     return filename
