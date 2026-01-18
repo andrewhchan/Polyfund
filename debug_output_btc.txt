@@ -1,0 +1,52 @@
+--- Debugging Thesis: Bitcoin ---
+Discovering markets...
+Supabase URL set: True, Key present: True
+Selecting anchor...
+
+-> [AI ANCHOR SELECTION] Analyzing markets...
+   Thesis: "Bitcoin"
+   Total markets pool: 10
+   [FUZZY] Filtered to 10 candidate markets
+
+   [AI SELECTED ANCHOR]
+   Market: Will Bitcoin reach $100,000 in January?...
+   Token: YES
+   Confidence: 90%
+   Reasoning: This market best serves as a numerical proxy for a general 'Bitcoin' thesis by targeting the significant $100,000 milestone. It strikes a strong balance between semantic alignment, moderate specificity (not too aggressive for a general positive belief), and high liquidity, indicating a reliable price signal for strong upward movement.
+Anchor: Will Bitcoin reach $100,000 in January? (Token: 103177127930055330392441373349372732434896433945295434937281341249293735506094) Choice: YES
+Fetching history for anchor 103177127930055330392441373349372732434896433945295434937281341249293735506094...
+Anchor history: 17 points
+2026-01-02    0.255
+2026-01-03    0.295
+2026-01-04    0.330
+2026-01-05    0.375
+2026-01-06    0.495
+2026-01-07    0.475
+2026-01-08    0.355
+2026-01-09    0.310
+2026-01-10    0.245
+2026-01-11    0.250
+2026-01-12    0.270
+2026-01-13    0.280
+2026-01-14    0.505
+2026-01-15    0.675
+2026-01-16    0.515
+2026-01-17    0.445
+2026-01-18    0.430
+Name: 103177127930055330392441373349372732434896433945295434937281341249293735506094, dtype: float64
+Anchor Std Dev: 0.1219261770378241
+Fetching candidates...
+Fetching Will Bitcoin reach $150,000 in January? (YES: 53342136288932702007624506186417846874594504126387502748453102780630218207922)...
+  Got 17 points
+Fetching Will bitcoin hit $1m before GTA VI? (YES: 105267568073659068217311993901927962476298440625043565106676088842803600775810)...
+  Got 31 points
+Fetching Will Bitcoin dip to $85,000 in January? (YES: 65596524896985010415844814777069255362767748488616308434723608750130614059462)...
+  Got 17 points
+Fetching Will Bitcoin reach $105,000 in January? (YES: 5890753752906002052534785499305647451620312211019774830504168272322511375782)...
+  Got 17 points
+Computing correlations...
+                                            token_id   correlation  n_points
+0  5334213628893270200762450618641784687459450412...  4.022771e-02        17
+1  1052675680736590682173119939019279624762984406...  5.975823e-16        17
+2  6559652489698501041584481477706925536276774848... -7.515158e-01        17
+3  5890753752906002052534785499305647451620312211...  8.495825e-01        17

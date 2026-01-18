@@ -129,3 +129,56 @@ export async function fetchTrendingMarkets(limit: number = 20): Promise<Trending
         return [];
     }
 }
+
+// Recommendation Types
+export interface RecommendationRequest {
+    thesis: string;
+    days?: number;
+    top_k?: number;
+}
+
+export interface RecommendationResponse {
+    thesis: string;
+    status: string;
+    anchor: {
+        question: string;
+        slug: string;
+        token_id: string;
+        volume_usd: number;
+        token_choice: string;
+        ai_reasoning: string;
+        ai_confidence: number;
+    };
+    portfolio: PortfolioItem[];
+}
+
+export interface PortfolioItem {
+    question: string;
+    slug: string;
+    token_id: string;
+    correlation: number;
+    weight: number;
+    action: 'BUY_YES' | 'BUY_NO';
+}
+
+export async function fetchRecommendations(thesis: string): Promise<RecommendationResponse | null> {
+    try {
+        const response = await fetch('/api/recommendations', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ thesis }),
+        });
+
+        if (!response.ok) {
+            console.error('Failed to fetch recommendations:', response.statusText);
+            return null;
+        }
+
+        return await response.json();
+    } catch (error) {
+        console.error('Error fetching recommendations:', error);
+        return null;
+    }
+}

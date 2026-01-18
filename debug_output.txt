@@ -1,0 +1,66 @@
+--- Debugging Thesis: Trump 2024 ---
+Discovering markets...
+Supabase URL set: True, Key present: True
+Selecting anchor...
+
+-> [AI ANCHOR SELECTION] Analyzing markets...
+   Thesis: "Trump 2024"
+   Total markets pool: 10
+   [FUZZY] Filtered to 10 candidate markets
+
+   [AI SELECTED ANCHOR]
+   Market: Will Trump nominate Bill Pulte as the next Fed chair?...
+   Token: YES
+   Confidence: 70%
+   Reasoning: The user's thesis 'Trump 2024' implies a belief that Trump will win the 2024 presidential election. While all provided markets are highly specific post-election events, Market 0 has the highest liquidity, indicating the most robust price signal. A 'YES' outcome on this market is contingent on Trump winning, making its price movements an indirect proxy for the probability of a Trump victory.
+Anchor: Will Trump nominate Bill Pulte as the next Fed chair? (Token: 8707393418896465550537491004148945001566800949202710797124018851880453264457) Choice: YES
+Fetching history for anchor 8707393418896465550537491004148945001566800949202710797124018851880453264457...
+Anchor history: 31 points
+2025-12-19    0.0005
+2025-12-20    0.0005
+2025-12-21    0.0005
+2025-12-22    0.0005
+2025-12-23    0.0005
+2025-12-24    0.0005
+2025-12-25    0.0005
+2025-12-26    0.0005
+2025-12-27    0.0005
+2025-12-28    0.0005
+2025-12-29    0.0005
+2025-12-30    0.0005
+2025-12-31    0.0005
+2026-01-01    0.0005
+2026-01-02    0.0005
+2026-01-03    0.0005
+2026-01-04    0.0005
+2026-01-05    0.0005
+2026-01-06    0.0005
+2026-01-07    0.0005
+2026-01-08    0.0005
+2026-01-09    0.0005
+2026-01-10    0.0005
+2026-01-11    0.0010
+2026-01-12    0.0005
+2026-01-13    0.0005
+2026-01-14    0.0005
+2026-01-15    0.0005
+2026-01-16    0.0010
+2026-01-17    0.0005
+2026-01-18    0.0005
+Name: 8707393418896465550537491004148945001566800949202710797124018851880453264457, dtype: float64
+Anchor Std Dev: 0.00012486551905735373
+Fetching candidates...
+Fetching Will Trump nominate himself as the next Fed chair? (YES: 90861079362480308652433470464488328958002752949226213855809529654473996256176)...
+  Got 31 points
+Fetching Will Trump nominate Janet Yellen as the next Fed chair? (YES: 13640175565741139780899214109220583091545514355775216223046832058986267305950)...
+  Got 31 points
+Fetching Will Trump nominate Barron Trump as the next Fed chair? (YES: 17991338911024525430424656145372731230076213521123393148855531586011791841190)...
+  Got 31 points
+Fetching Will Trump acquire Greenland before 2027? (YES: 5161623255678193352839985156330393796378434470119114669671615782853260939535)...
+  Got 26 points
+Computing correlations...
+                                            token_id   correlation  n_points
+0  9086107936248030865243347046448832895800275294...  1.019501e-15        31
+1  1364017556574113978089921410922058309154551435... -8.318733e-02        31
+2  1799133891102452543042465614537273123007621352...  1.019501e-15        31
+3  5161623255678193352839985156330393796378434470...  2.530800e-01        26

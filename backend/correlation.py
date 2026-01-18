@@ -109,6 +109,7 @@ def generate_signals(
             'action': action,
             'signal_strength': signal_strength,
             'n_data_points': n_points,
+            'slug': market_info.get('slug', ''),
             'volume_usd': market_info.get('volume_usd', 0)
         })
 

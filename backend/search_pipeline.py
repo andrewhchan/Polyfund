@@ -34,7 +34,7 @@ def query_markets_by_keywords(
             resp = (
                 client.table("markets")
                 .select(
-                    "condition_id,question,event_title,status,volume_usd,yes_token_id,no_token_id,token_id,outcome_yes_price"
+                    "condition_id,question,slug,event_title,status,volume_usd,yes_token_id,no_token_id,token_id,outcome_yes_price"
                 )
                 .or_(f"question.ilike.%{kw}%,event_title.ilike.%{kw}%")
                 .eq("status", "open")
@@ -53,6 +53,7 @@ def query_markets_by_keywords(
             results[cid] = {
                 "condition_id": cid,
                 "question": r.get("question"),
+                "slug": r.get("slug"),
                 "event_title": r.get("event_title"),
                 "status": r.get("status"),
                 "volume_usd": float(r.get("volume_usd") or 0),
@@ -171,7 +172,7 @@ def _search_supabase_markets(client, keywords: List[str], k: int) -> Tuple[Dict[
                 resp = (
                     client.table("markets")
                     .select(
-                        "condition_id,question,event_title,status,volume_usd,yes_token_id,no_token_id,token_id,outcome_yes_price"
+                        "condition_id,question,slug,event_title,status,volume_usd,yes_token_id,no_token_id,token_id,outcome_yes_price"
                     )
                     .or_(f"question.ilike.%{kw}%,event_title.ilike.%{kw}%")
                     .eq("status", "open")
@@ -198,6 +199,7 @@ def _search_supabase_markets(client, keywords: List[str], k: int) -> Tuple[Dict[
             results[cid] = {
                 "condition_id": cid,
                 "question": r.get("question"),
+                "slug": r.get("slug"),
                 "event_title": r.get("event_title"),
                 "status": r.get("status"),
                 "end_date": r.get("end_date"),
@@ -230,6 +232,7 @@ def _flatten_market(event: Dict[str, Any], market: Dict[str, Any]) -> Dict[str, 
         "no_token_id": no_token_id,
         "token_id": yes_token_id,
         "question": market.get("question", ""),
+        "slug": market.get("slug") or event.get("slug"),
         "event_title": event.get("title", ""),
         "volume_usd": volume,
         "outcome_yes_price": _parse_price(market),

@@ -33,6 +33,7 @@ load_dotenv()
 def _anchor_to_dict(anchor: AnchorMarket) -> Dict[str, Any]:
     return {
         "question": anchor.market.get("question"),
+        "slug": anchor.market.get("slug"),
         "token_id": anchor.token_id,
         "volume_usd": anchor.market.get("volume_usd"),
         "token_choice": anchor.token_choice,
