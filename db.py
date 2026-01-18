@@ -2,24 +2,7 @@ import os
 from functools import lru_cache
 from typing import Optional
 
-from sqlalchemy import create_engine
-from sqlalchemy.engine import Engine
 from supabase import Client, create_client
-
-
-@lru_cache()
-def get_engine() -> Optional[Engine]:
-    """
-    Return a SQLAlchemy engine if explicitly enabled.
-    Disabled by default to favor Supabase client path.
-    """
-    if os.getenv("DISABLE_DIRECT_DB", "").lower() in ("1", "true", "yes"):
-        return None
-    url = os.getenv("DATABASE_URL") or os.getenv("SUPABASE_DB_URL")
-    if not url:
-        return None
-    return create_engine(url, future=True, pool_pre_ping=True)
-
 
 @lru_cache()
 def get_supabase() -> Optional[Client]:
