@@ -12,6 +12,58 @@ from llm_keywords import generate_keywords
 from market_data import search_polymarket_events
 
 
+def query_markets_by_keywords(
+    keywords: List[str],
+    limit: int = 100
+) -> List[Dict[str, Any]]:
+    """
+    Query markets table using full-text search on event_title.
+    Uses search_tsv tsvector column for efficient matching.
+
+    Args:
+        keywords: List of search keywords
+        limit: Maximum results per keyword
+
+    Returns:
+        List of market dicts, deduplicated and sorted by volume
+    """
+    engine = get_engine()
+    if not engine:
+        return []
+
+    results = {}
+    with engine.connect() as conn:
+        for kw in keywords:
+            stmt = text("""
+                SELECT condition_id, question, event_title, status,
+                       volume_usd, yes_token_id, no_token_id, token_id,
+                       outcome_yes_price
+                FROM markets
+                WHERE search_tsv @@ plainto_tsquery(:kw)
+                  AND status = 'open'
+                ORDER BY volume_usd DESC
+                LIMIT :lim
+            """)
+            rows = conn.execute(stmt, {"kw": kw, "lim": limit}).mappings().all()
+            for r in rows:
+                cid = r["condition_id"]
+                if cid not in results:
+                    results[cid] = {
+                        "condition_id": cid,
+                        "question": r["question"],
+                        "event_title": r["event_title"],
+                        "status": r["status"],
+                        "volume_usd": float(r["volume_usd"] or 0),
+                        "yes_token_id": r["yes_token_id"],
+                        "no_token_id": r["no_token_id"],
+                        "token_id": r["token_id"] or r["yes_token_id"],
+                        "outcome_yes_price": float(r["outcome_yes_price"] or 0.5),
+                    }
+
+    # Sort by volume and return
+    return sorted(results.values(), key=lambda x: x.get("volume_usd", 0), reverse=True)
+
+
 def discover_markets(
     query: str,
     k: int = 30,

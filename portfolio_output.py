@@ -15,7 +15,7 @@ from correlation import compute_rolling_correlations
 
 def print_portfolio_table(
     portfolio_df: pd.DataFrame,
-    belief: Dict,
+    anchor: Dict,
     thesis: str
 ) -> None:
     """
@@ -59,7 +59,7 @@ def print_portfolio_table(
 
 def save_portfolio_csv(
     portfolio_df: pd.DataFrame,
-    belief: Dict,
+    anchor: Dict,
     thesis: str
 ) -> str:
     """
@@ -120,9 +120,9 @@ def _compute_position_pnl_series(series: pd.Series, action: str) -> pd.Series:
 
 def save_portfolio_json(
     portfolio_df: pd.DataFrame,
-    belief: Dict,
+    anchor: Dict,
     thesis: str,
-    belief_series: pd.Series,
+    anchor_series: pd.Series,
     candidate_series: Dict[str, pd.Series],
     windows: Iterable[int] = (7, 14, 30)
 ) -> str:
@@ -133,10 +133,10 @@ def save_portfolio_json(
     safe_thesis = "".join(c if c.isalnum() else "_" for c in thesis.lower())
     filename = f"quant_basket_{safe_thesis}_timeseries.json"
 
-    rolling = compute_rolling_correlations(belief_series, candidate_series, windows)
+    rolling = compute_rolling_correlations(anchor_series, candidate_series, windows)
 
     price_series = {
-        'belief': _series_to_points(belief_series),
+        'anchor': _series_to_points(anchor_series),
         'candidates': {
             token_id: _series_to_points(series) for token_id, series in candidate_series.items()
         }
@@ -187,7 +187,7 @@ def save_portfolio_json(
     payload = {
         'metadata': {
             'thesis': thesis,
-            'belief_token_id': belief.get('token_id'),
+            'anchor_token_id': anchor.get('token_id'),
             'generated_at': datetime.now(timezone.utc).isoformat(),
             'rolling_windows_days': [int(w) for w in windows]
         },
