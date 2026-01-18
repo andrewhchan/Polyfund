@@ -2,9 +2,9 @@ from typing import Dict, List, Tuple, Any
 
 from rapidfuzz import fuzz
 
-from llm_keywords import generate_keywords
-from db import get_supabase
-from llm_proxy import generate_proxy_theses
+from .llm_keywords import generate_keywords
+from .db import get_supabase
+from .llm_proxy import generate_proxy_theses
 
 KEYWORD_MATCH_THRESHOLD = 70
 
@@ -84,6 +84,8 @@ def discover_markets(
         seen.update(supa_markets)
         explain_filters["total_found"] += supa_counts.get("total_found", 0)
         explain_filters["deduped"] += supa_counts.get("deduped", 0)
+        explain_filters["rpc_errors"] = supa_counts.get("rpc_errors", 0)
+        explain_filters["fallback_table_queries"] = supa_counts.get("fallback_table_queries", 0)
     else:
         explain_filters["notes"] = ["Supabase client not configured; no markets returned"]
 
@@ -143,11 +145,17 @@ def _search_supabase_markets(client, keywords: List[str], k: int) -> Tuple[Dict[
     Uses optimized SQL with GIN index for better performance on large result sets.
     """
     results: Dict[str, Dict[str, Any]] = {}
-    counts = {"total_found": 0, "deduped": 0}
+    counts = {
+        "total_found": 0,
+        "deduped": 0,
+        "fallback_table_queries": 0,
+        "rpc_errors": 0,
+    }
 
     for kw in keywords:
+        data = []
         try:
-            # Use RPC to call optimized SQL search
+            # Use RPC to call optimized SQL search if available
             resp = client.rpc(
                 "search_markets_by_keyword",
                 {
@@ -155,10 +163,30 @@ def _search_supabase_markets(client, keywords: List[str], k: int) -> Tuple[Dict[
                     "p_limit": k
                 }
             ).execute()
+            data = getattr(resp, "data", None) or []
         except Exception:
+            counts["rpc_errors"] += 1
+            # Fallback to simple ilike query on markets table
+            try:
+                resp = (
+                    client.table("markets")
+                    .select(
+                        "condition_id,question,event_title,status,volume_usd,yes_token_id,no_token_id,token_id,outcome_yes_price"
+                    )
+                    .or_(f"question.ilike.%{kw}%,event_title.ilike.%{kw}%")
+                    .eq("status", "open")
+                    .order("volume_usd", desc=True)
+                    .limit(k)
+                    .execute()
+                )
+                data = getattr(resp, "data", None) or []
+                counts["fallback_table_queries"] += 1
+            except Exception:
+                continue
+
+        if not isinstance(data, list):
             continue
 
-        data = getattr(resp, "data", None) or []
         counts["total_found"] += len(data)
         for r in data:
             cid = r.get("condition_id")

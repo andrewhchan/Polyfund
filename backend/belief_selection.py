@@ -11,7 +11,7 @@ from typing import Dict, List, Optional
 
 from rapidfuzz import fuzz, process
 
-from ai_client import AIClient, AnchorSelectionResult, AIClientError
+from .ai_client import AIClient, AnchorSelectionResult, AIClientError
 
 
 FUZZY_CANDIDATES_LIMIT = 50  # Max markets to send to AI after fuzzy filter
@@ -144,6 +144,9 @@ def _build_anchor_from_result(
         token_id = market.get("yes_token_id") or market.get("token_id")
     else:
         token_id = market.get("no_token_id") or market.get("yes_token_id") or market.get("token_id")
+
+    if not token_id:
+        raise ValueError(f"No token_id found in market: {market.get('question', 'unknown')}")
 
     return AnchorMarket(
         market=market,

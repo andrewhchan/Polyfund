@@ -25,10 +25,4 @@ dependencies = [
 ]
 
 [tool.setuptools]
-py-modules = [
-  "belief_selection",
-  "correlation",
-  "market_data",
-  "mock_ai",
-  "portfolio_output",
-]
+packages = ["backend"]

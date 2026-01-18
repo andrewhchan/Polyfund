@@ -153,7 +153,7 @@ def compute_rolling_correlations(
     Returns dict keyed by window size (days), each value is a DataFrame with
     columns: [date, token_id, correlation].
     """
-    results: Dict[int, List[Dict[str, object]]] = {}
+    results: Dict[int, pd.DataFrame] = {}
 
     for window in windows:
         window_rows: List[Dict[str, object]] = []

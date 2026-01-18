@@ -28,13 +28,13 @@ from typing import Optional
 
 import pandas as pd
 
-from llm_keywords import generate_keywords
-from llm_proxy import generate_proxy_theses
-from search_pipeline import query_markets_by_keywords
-from market_data import fetch_price_history, fetch_price_history_batch, HISTORY_DAYS
-from belief_selection import select_anchor_market, AnchorMarket
-from correlation import compute_correlation_matrix, generate_signals, construct_portfolio, MIN_OVERLAPPING_DAYS
-from portfolio_output import print_portfolio_table, save_portfolio_csv
+from .llm_keywords import generate_keywords
+from .llm_proxy import generate_proxy_theses
+from .search_pipeline import query_markets_by_keywords
+from .market_data import fetch_price_history, fetch_price_history_batch, HISTORY_DAYS
+from .belief_selection import select_anchor_market, AnchorMarket
+from .correlation import compute_correlation_matrix, generate_signals, construct_portfolio, MIN_OVERLAPPING_DAYS
+from .portfolio_output import print_portfolio_table, save_portfolio_csv
 
 CONFIDENCE_THRESHOLD = 0.90
 MAX_MARKETS_PER_QUERY = 1000  # Max markets to fetch from DB per keyword

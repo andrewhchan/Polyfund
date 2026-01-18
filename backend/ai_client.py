@@ -140,6 +140,8 @@ class AIClient:
                 contents=prompt
             )
             raw_response = response.text
+            if raw_response is None:
+                raise AIClientError("Gemini API returned empty response")
         except Exception as e:
             raise AIClientError(f"Gemini API call failed: {e}")
 
@@ -178,9 +180,12 @@ class AIClient:
         token_match = re.search(r'"token_choice"\s*:\s*"(YES|NO)"', response)
 
         if index_match and token_match:
+            token_value = token_match.group(1)
+            if token_value not in ("YES", "NO"):
+                token_value = "YES"
             return AnchorSelectionResult(
                 market_index=int(index_match.group(1)),
-                token_choice=token_match.group(1),
+                token_choice=token_value,  # type: ignore
                 reasoning="[Partial parse - check raw response]",
                 token_reasoning="[Partial parse]",
                 confidence=0.5,

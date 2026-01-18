@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 
 import pandas as pd
 
-from correlation import compute_rolling_correlations
+from .correlation import compute_rolling_correlations
 
 
 def print_portfolio_table(

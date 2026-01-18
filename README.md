@@ -1,6 +1,6 @@
 # Polymarket Correlation-Aware Trade Recommendation Engine
 
-FastAPI backend that discovers Polymarket markets for a free-text thesis, selects a belief market, computes historical co-movement correlations, and returns recommendations plus time-series artifacts for visualization.
+FastAPI backend (under `backend/`) that discovers Polymarket markets for a free-text thesis, selects a belief market, computes historical co-movement correlations, and returns recommendations plus time-series artifacts for visualization.
 
 ## Endpoints
 
@@ -27,7 +27,9 @@ FastAPI backend that discovers Polymarket markets for a free-text thesis, select
 Using `uv` (recommended):
 ```bash
 uv sync
-uv run uvicorn app:app --reload
+uv run uvicorn backend.api_server:app --reload
+# or legacy shim: uv run uvicorn api_server:app --reload
+# CLI: uv run python -m backend.main "Lakers good season"
 ```
 
 ## ETL: load markets into Postgres

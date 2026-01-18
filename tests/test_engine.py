@@ -1,8 +1,8 @@
 import pandas as pd
 
-from llm_keywords import _generate_mock
-from search_pipeline import discover_markets, _flatten_market
-from correlation import compute_correlation_matrix
+from backend.llm_keywords import _generate_mock
+from backend.search_pipeline import discover_markets, _flatten_market
+from backend.correlation import compute_correlation_matrix
 
 
 def test_generate_mock_keywords_dedup():

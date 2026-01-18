@@ -5,7 +5,7 @@ from typing import Any, Dict, List
 
 import requests
 
-from db import get_supabase
+from .db import get_supabase
 
 
 GAMMA_BASE = os.getenv("POLYMARKET_GAMMA_BASE_URL", "https://gamma-api.polymarket.com")
