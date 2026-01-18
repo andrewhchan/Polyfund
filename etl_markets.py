@@ -6,7 +6,7 @@ from typing import Any, Dict, List
 import requests
 from sqlalchemy import text
 
-from db import get_engine
+from db import get_engine, get_supabase
 
 
 GAMMA_BASE = os.getenv("POLYMARKET_GAMMA_BASE_URL", "https://gamma-api.polymarket.com")
@@ -17,12 +17,16 @@ def fetch_markets(limit: int, offset: int = 0) -> List[Dict[str, Any]]:
     params = {
         "limit": limit,
         "offset": offset,
-        "active": "true",
-        "closed": "false",
-        "order": "volume_num",
-        "ascending": "false",
+        "active": True,
+        "closed": False,
+        # "order": "volume_num",
+        # "ascending": False,
     }
     resp = requests.get(f"{GAMMA_BASE}/markets", params=params, timeout=20)
+    if resp.status_code == 422:
+        # Retry without filters that may not be supported on this endpoint
+        params = {"limit": limit, "offset": offset}
+        resp = requests.get(f"{GAMMA_BASE}/markets", params=params, timeout=20)
     resp.raise_for_status()
     data = resp.json()
     return data if isinstance(data, list) else []
@@ -111,15 +115,26 @@ def upsert_markets(engine, markets: List[Dict[str, Any]]) -> None:
         conn.execute(stmt, markets)
 
 
+def upsert_supabase(client, markets: List[Dict[str, Any]]) -> None:
+    if not markets:
+        return
+    # Supabase upsert with on_conflict condition_id
+    # Send in smaller chunks to avoid payload limits
+    chunk_size = 500
+    for i in range(0, len(markets), chunk_size):
+        chunk = markets[i : i + chunk_size]
+        client.table("markets").upsert(chunk, on_conflict="condition_id").execute()
+
+
 def main():
     parser = argparse.ArgumentParser(description="Ingest Polymarket markets into Postgres.")
     parser.add_argument("--limit", type=int, default=1000, help="Total markets to fetch.")
     parser.add_argument("--batch-size", type=int, default=BATCH_SIZE, help="Fetch batch size.")
     args = parser.parse_args()
 
-    engine = get_engine()
-    if not engine:
-        raise SystemExit("DATABASE_URL or SUPABASE_DB_URL must be set.")
+    supabase_client = get_supabase()
+    if not supabase_client:
+        raise SystemExit("DATABASE_URL/SUPABASE_DB_URL or SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY must be set.")
 
     fetched = 0
     offset = 0
@@ -133,7 +148,8 @@ def main():
         if not page:
             break
         flattened = [f for f in (flatten_market(m) for m in page) if f.get("condition_id")]
-        upsert_markets(engine, flattened)
+        if supabase_client:
+            upsert_supabase(supabase_client, flattened)
         fetched += len(flattened)
         offset += this_limit
         print(f"Ingested {fetched} markets...")
