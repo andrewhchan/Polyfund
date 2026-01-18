@@ -16,7 +16,7 @@ from google import genai
 @dataclass
 class AnchorSelectionResult:
     """Result from AI anchor selection."""
-    market_index: int
+    market_index: Optional[int]
     reasoning: str
     token_choice: Literal["YES", "NO"]
     token_reasoning: str
@@ -48,10 +48,15 @@ The market should have:
 - Specificity: "Lakers make playoffs" is better than "Lakers win championship"
   for a "good season" thesis
 
+CRITICAL: If NO market is a strong semantic match (e.g. thesis is nonsense, irrelevant, or very different), return null for the selected_market_index. 
+Do NOT force a match. It is better to return nothing than a bad anchor.
+If you return an anchor, confidence must be > 0.7.
+
 ## Examples
 - "Lakers good season" -> "Lakers Make Playoffs" (GOOD - moderate specificity)
 - "Lakers good season" -> "Lakers Win Championship" (TOO SPECIFIC)
 - "Trump loses" -> "Trump wins election" with NO token (GOOD - inverted alignment)
+- "Aliens invade" -> "Soccer match result" (BAD - return null)
 
 ## User's Thesis
 {user_thesis}
@@ -61,11 +66,43 @@ The market should have:
 
 ## Response (JSON only, no markdown code blocks)
 {{
-    "selected_market_index": <int>,
-    "reasoning": "<2-3 sentences: why this market is the best proxy>",
+    "selected_market_index": <int or null>,
+    "reasoning": "<2-3 sentences: why this market is the best proxy, or why none fit>",
     "token_choice": "YES" or "NO",
     "token_reasoning": "<1 sentence: why this token aligns with thesis>",
     "confidence": <0.0-1.0>
+}}
+"""
+
+
+TOP_BETS_SELECTION_PROMPT = """You are a financial analyst constructing a basket of prediction market bets.
+
+## Task
+Given a user's abstract belief and a list of potentially relevant markets, select the TOP {top_k} markets that constitute the best "bets" to express this view.
+These should be your "arbitrary bets" when a single perfect correlation anchor cannot be found.
+
+## Filters
+- Ignore markets that are completely irrelevant.
+- Prefer higher volume markets when relevance is similar.
+- You can select fewer than {top_k} if there aren't enough good matches.
+
+## User's Thesis
+{user_thesis}
+
+## Available Markets
+{markets_json}
+
+## Response (JSON only, no markdown code blocks)
+{{
+    "selected_bets": [
+        {{
+            "market_index": <int>,
+            "reasoning": "<1 sentence: why this is a good bet for the thesis>",
+            "token_choice": "YES" or "NO",
+            "confidence": <0.0-1.0>
+        }},
+        ...
+    ]
 }}
 """
 
@@ -203,10 +240,13 @@ class AIClient:
         """Validate parsed data and create result object."""
 
         market_index = data.get("selected_market_index")
-        if market_index is None or not isinstance(market_index, int):
-            raise AIClientError(f"Invalid market_index: {market_index}")
-
-        if market_index < 0 or market_index >= num_markets:
+        
+        # Allow explicit null/None for no selection
+        if market_index is None:
+            pass
+        elif not isinstance(market_index, int):
+             raise AIClientError(f"Invalid market_index: {market_index}")
+        elif market_index < 0 or market_index >= num_markets:
             raise AIClientError(f"Market index {market_index} out of range (0-{num_markets-1})")
 
         token_choice = data.get("token_choice", "YES")
@@ -226,3 +266,78 @@ class AIClient:
             confidence=confidence,
             raw_response=raw_response
         )
+
+    def select_top_bets(
+        self,
+        user_thesis: str,
+        markets: List[Dict],
+        top_k: int = 10
+    ) -> List[Dict]:
+        """
+        Use AI to select the top K bets for a thesis (fallback mode).
+
+        Returns:
+            List of dicts with:
+            - market (original market dict)
+            - reasoning
+            - token_choice
+            - confidence
+        """
+        markets_for_prompt = []
+        for i, m in enumerate(markets):
+            markets_for_prompt.append({
+                "index": i,
+                "question": m.get("question", ""),
+                "volume_usd": m.get("volume_usd", 0),
+            })
+
+        markets_json = json.dumps(markets_for_prompt, indent=2)
+        prompt = TOP_BETS_SELECTION_PROMPT.format(
+            user_thesis=user_thesis,
+            markets_json=markets_json,
+            top_k=top_k
+        )
+
+        try:
+            response = self.client.models.generate_content(
+                model=self.model_name,
+                contents=prompt
+            )
+            raw_response = response.text
+            if not raw_response:
+                raise AIClientError("Gemini API returned empty response for top bets")
+        except Exception as e:
+            print(f"[ERROR] Gemini API call failed for top bets: {e}")
+            return []
+
+        # Parse logic for list of bets
+        try:
+            # 1. Strip markdown
+            clean_response = raw_response.strip()
+            if clean_response.startswith("```json"):
+                clean_response = clean_response[7:]
+            if clean_response.startswith("```"):
+                clean_response = clean_response[3:]
+            if clean_response.endswith("```"):
+                clean_response = clean_response[:-3]
+
+            data = json.loads(clean_response)
+            selected = data.get("selected_bets", [])
+
+            results = []
+            for item in selected:
+                idx = item.get("market_index")
+                if idx is not None and 0 <= idx < len(markets):
+                    market = markets[idx]
+                    results.append({
+                        "market": market,
+                        "reasoning": item.get("reasoning", ""),
+                        "token_choice": item.get("token_choice", "YES"),
+                        "confidence": float(item.get("confidence", 0.5))
+                    })
+            return results
+
+        except Exception as e:
+            print(f"[ERROR] Failed to parse top bets response: {e}")
+            print(f"Raw response: {raw_response}")
+            return []

@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Search, Github, Loader2 } from 'lucide-react';
 import { TrendingCard } from '@/app/components/TrendingCard';
+import { PortfolioCharts } from '@/app/components/PortfolioCharts';
+import { ScenarioSimulator } from '@/app/components/ScenarioSimulator';
 import { fetchTrendingMarkets, fetchRecommendations, TrendingMarket, RecommendationResponse, PortfolioItem } from '@/services/polymarket';
 
 export default function App() {
@@ -33,7 +35,7 @@ export default function App() {
     };
 
     return (
-        <div className="size-full bg-[#0a0a0f] text-white overflow-auto">
+        <div className="min-h-screen bg-[#0a0a0f] text-white">
             {/* Header */}
             <header className="flex items-center justify-between p-6">
                 <a href="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
@@ -78,29 +80,58 @@ export default function App() {
                 {/* Logic: If recommendations exist, show them. Else, show trending. */}
                 {recommendations ? (
                     <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-                        <section className="mb-12">
-                            <h2 className="text-2xl font-bold mb-4 text-blue-400">Anchor Market</h2>
-                            <div className="bg-[#13131a] border border-blue-500/30 rounded-lg p-6 flex flex-col md:flex-row gap-6 items-start md:items-center">
-                                <div className="flex-1">
-                                    <div className="flex items-center gap-3 mb-2">
-                                        <span className="bg-blue-600 text-xs px-2 py-1 rounded font-bold">ANCHOR</span>
-                                        <span className="text-sm text-gray-400">Confidence: {(recommendations.anchor.ai_confidence * 100).toFixed(0)}%</span>
-                                    </div>
-                                    <a href={`https://polymarket.com/event/${recommendations.anchor.slug}`} target="_blank" rel="noopener noreferrer" className="hover:underline">
-                                        <h3 className="text-xl font-bold mb-2">{recommendations.anchor.question}</h3>
-                                    </a>
-                                    <p className="text-gray-400 text-sm italic">"{recommendations.anchor.ai_reasoning}"</p>
-                                </div>
-                                <div className="text-right">
-                                    <button className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg transition-colors">
-                                        Trade {recommendations.anchor.token_choice}
-                                    </button>
+
+                        {/* [NEW] Warning Banner */}
+                        {recommendations.warning && (
+                            <div className="bg-yellow-500/10 border border-yellow-500/30 text-yellow-200 p-4 rounded-lg mb-8 flex items-start gap-3">
+                                <span className="text-xl">⚠️</span>
+                                <div>
+                                    <h3 className="font-bold text-yellow-100">Low Confidence Match</h3>
+                                    <p className="text-sm opacity-90">{recommendations.warning}</p>
                                 </div>
                             </div>
-                        </section>
+                        )}
+
+                        {/* Anchor Section - Only show if anchor exists */}
+                        {recommendations.anchor && (
+                            <section className="mb-12">
+                                <h2 className="text-2xl font-bold mb-4 text-blue-400">Anchor Market</h2>
+                                <div className="bg-[#13131a] border border-blue-500/30 rounded-lg p-6 flex flex-col md:flex-row gap-6 items-start md:items-center">
+                                    <div className="flex-1">
+                                        <div className="flex items-center gap-3 mb-2">
+                                            <span className="bg-blue-600 text-xs px-2 py-1 rounded font-bold">ANCHOR</span>
+                                            <span className="text-sm text-gray-400">Confidence: {(recommendations.anchor.ai_confidence * 100).toFixed(0)}%</span>
+                                        </div>
+                                        <a href={`https://polymarket.com/event/${recommendations.anchor.slug}`} target="_blank" rel="noopener noreferrer" className="hover:underline">
+                                            <h3 className="text-xl font-bold mb-2">{recommendations.anchor.question}</h3>
+                                        </a>
+                                        <p className="text-gray-400 text-sm italic">"{recommendations.anchor.ai_reasoning}"</p>
+                                    </div>
+                                    <div className="text-right">
+                                        <button className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg transition-colors">
+                                            Trade {recommendations.anchor.token_choice}
+                                        </button>
+                                    </div>
+                                </div>
+                            </section>
+                        )}
+
+                        {/* Visualizations Grid - Only show if anchor exists */}
+                        {recommendations.anchor && (
+                            <section className="mb-12 grid grid-cols-1 lg:grid-cols-3 gap-6">
+                                <div className="lg:col-span-2">
+                                    <PortfolioCharts data={recommendations} />
+                                </div>
+                                <div className="lg:col-span-1">
+                                    <ScenarioSimulator data={recommendations} />
+                                </div>
+                            </section>
+                        )}
 
                         <section>
-                            <h2 className="text-xl font-semibold mb-6">Correlated Opportunities</h2>
+                            <h2 className="text-xl font-semibold mb-6">
+                                {recommendations.anchor ? "Correlated Opportunities" : "AI Selected Bets"}
+                            </h2>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 {recommendations.portfolio.map((item: PortfolioItem, index: number) => (
                                     <div key={index} className="bg-[#1a1a24] border border-gray-800 rounded-xl p-4 hover:border-gray-600 transition-colors">
@@ -108,9 +139,16 @@ export default function App() {
                                             <a href={`https://polymarket.com/event/${item.slug}`} target="_blank" rel="noopener noreferrer" className="hover:underline pr-2 flex-1">
                                                 <h3 className="font-semibold line-clamp-2">{item.question}</h3>
                                             </a>
-                                            <div className={`px-2 py-1 rounded text-xs font-bold ${item.correlation > 0 ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
-                                                {item.correlation > 0 ? '+' : ''}{item.correlation.toFixed(2)}
-                                            </div>
+                                            {/* Show Correlation if anchor exists, else generic AI badge */}
+                                            {recommendations.anchor ? (
+                                                <div className={`px-2 py-1 rounded text-xs font-bold ${item.correlation > 0 ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
+                                                    {item.correlation > 0 ? '+' : ''}{item.correlation.toFixed(2)}
+                                                </div>
+                                            ) : (
+                                                <div className="px-2 py-1 rounded text-xs font-bold bg-blue-500/20 text-blue-400">
+                                                    AI Pick
+                                                </div>
+                                            )}
                                         </div>
                                         <div className="flex justify-between items-end mt-4">
                                             <div className="text-sm text-gray-400">

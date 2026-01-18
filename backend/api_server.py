@@ -14,6 +14,7 @@ from .correlation import (
 )
 from .llm_proxy import generate_proxy_theses
 from .market_data import fetch_price_history, HISTORY_DAYS
+from .portfolio_output import generate_portfolio_timeseries
 from .search_pipeline import discover_markets
 
 CONFIDENCE_THRESHOLD = 0.90
@@ -31,9 +32,13 @@ load_dotenv()
 
 
 def _anchor_to_dict(anchor: AnchorMarket) -> Dict[str, Any]:
+    slug = anchor.market.get("slug")
+    if not slug and "event" in anchor.market:
+        slug = anchor.market["event"].get("slug")
+
     return {
         "question": anchor.market.get("question"),
-        "slug": anchor.market.get("slug"),
+        "slug": slug,
         "token_id": anchor.token_id,
         "volume_usd": anchor.market.get("volume_usd"),
         "token_choice": anchor.token_choice,
@@ -70,6 +75,13 @@ def build_recommendations(req: RecommendationRequest) -> Dict[str, Any]:
         keyword_match_threshold=req.keyword_match_threshold,
         allow_fallback=True,
     )
+    
+    # Pre-process markets to Ensure slug is available (it might be nested in 'event')
+    if markets:
+        for m in markets:
+            if not m.get("slug") and "event" in m:
+                m["slug"] = m["event"].get("slug")
+
     if not markets:
         return _error_payload(req.thesis, "discover_markets", "No markets found for thesis", explain)
 
@@ -94,11 +106,33 @@ def build_recommendations(req: RecommendationRequest) -> Dict[str, Any]:
                     seen_conditions.add(cid)
                     alt_markets.append(m)
             if alt_markets:
+                # Ensure slugs are populated for new markets
+                for m in alt_markets:
+                    if not m.get("slug") and "event" in m:
+                        m["slug"] = m["event"].get("slug")
+                        
                 markets = alt_markets
                 anchor = select_anchor_market(markets, req.thesis)
 
     if anchor is None or anchor.confidence < CONFIDENCE_THRESHOLD:
-        return _error_payload(req.thesis, "anchor_selection", "No anchor with sufficient confidence", explain)
+        from .belief_selection import select_arbitrary_bets
+        arbitrary_bets = select_arbitrary_bets(markets, req.thesis, k=10)
+        
+        return {
+            "thesis": req.thesis,
+            "status": "ok",
+            "warning": "Thesis is too far off an existing market for data analysis.",
+            "anchor": None,
+            "portfolio": arbitrary_bets,
+            "signals": [],
+            "timeseries": {
+                "metadata": {"thesis": req.thesis},
+                "price_series": {"anchor": [], "candidates": {}},
+                "rolling_correlations": {},
+                "pnl_curves": {"portfolio": [], "positions": {}}
+            },
+            "explain": explain,
+        }
 
     # Build lookup for metadata
     markets_lookup = {m["yes_token_id"]: m for m in markets if m.get("yes_token_id")}
@@ -136,12 +170,23 @@ def build_recommendations(req: RecommendationRequest) -> Dict[str, Any]:
 
     portfolio_df = construct_portfolio(signals_df)
 
+    # Step 6: Generate time-series data for visualization (re-using existing series)
+    timeseries_data = generate_portfolio_timeseries(
+        portfolio_df=portfolio_df,
+        anchor=_anchor_to_dict(anchor),
+        thesis=req.thesis,
+        anchor_series=anchor_series,
+        candidate_series=candidate_series,
+        windows=[7, 14, 30]
+    )
+
     return {
         "thesis": req.thesis,
         "status": "ok",
         "anchor": _anchor_to_dict(anchor),
         "portfolio": _df_records(portfolio_df),
         "signals": _df_records(signals_df),
+        "timeseries": timeseries_data,
         "explain": explain,
     }
 

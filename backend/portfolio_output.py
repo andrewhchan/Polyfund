@@ -4,7 +4,7 @@ Portfolio Output & Formatting Module
 Handles console output and CSV export for portfolio results.
 """
 
-from typing import Dict, Iterable
+from typing import Any, Dict, Iterable
 import json
 from datetime import datetime, timezone
 
@@ -118,21 +118,18 @@ def _compute_position_pnl_series(series: pd.Series, action: str) -> pd.Series:
     return pnl
 
 
-def save_portfolio_json(
+def generate_portfolio_timeseries(
     portfolio_df: pd.DataFrame,
     anchor: Dict,
     thesis: str,
     anchor_series: pd.Series,
     candidate_series: Dict[str, pd.Series],
     windows: Iterable[int] = (7, 14, 30)
-) -> str:
+) -> Dict[str, Any]:
     """
-    Save time-series analytics to JSON for visualization.
+    Generate time-series analytics dictionary.
     Includes rolling correlations, price paths, and PnL curves.
     """
-    safe_thesis = "".join(c if c.isalnum() else "_" for c in thesis.lower())
-    filename = f"quant_basket_{safe_thesis}_timeseries.json"
-
     rolling = compute_rolling_correlations(anchor_series, candidate_series, windows)
 
     price_series = {
@@ -146,6 +143,7 @@ def save_portfolio_json(
     pnl_frames = []
     weights = {}
 
+    # Ensure portfolio_df uses the same token_id format as candidate_series
     for _, row in portfolio_df.iterrows():
         token_id = row['token_id']
         action = row['action']
@@ -184,7 +182,7 @@ def save_portfolio_json(
         for window, df in rolling.items()
     }
 
-    payload = {
+    return {
         'metadata': {
             'thesis': thesis,
             'anchor_token_id': anchor.get('token_id'),
@@ -198,6 +196,26 @@ def save_portfolio_json(
             'positions': position_pnls
         }
     }
+
+
+def save_portfolio_json(
+    portfolio_df: pd.DataFrame,
+    anchor: Dict,
+    thesis: str,
+    anchor_series: pd.Series,
+    candidate_series: Dict[str, pd.Series],
+    windows: Iterable[int] = (7, 14, 30)
+) -> str:
+    """
+    Save time-series analytics to JSON for visualization.
+    Includes rolling correlations, price paths, and PnL curves.
+    """
+    safe_thesis = "".join(c if c.isalnum() else "_" for c in thesis.lower())
+    filename = f"quant_basket_{safe_thesis}_timeseries.json"
+
+    payload = generate_portfolio_timeseries(
+        portfolio_df, anchor, thesis, anchor_series, candidate_series, windows
+    )
 
     with open(filename, 'w', encoding='utf-8') as f:
         json.dump(payload, f, indent=2)

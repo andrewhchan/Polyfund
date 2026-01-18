@@ -42,7 +42,8 @@ def query_markets_by_keywords(
                 .limit(limit)
                 .execute()
             )
-        except Exception:
+        except Exception as e:
+            print(f"[ERROR] Supabase RPC failed: {e}")
             continue
 
         data = getattr(resp, "data", None) or []
@@ -165,14 +166,18 @@ def _search_supabase_markets(client, keywords: List[str], k: int) -> Tuple[Dict[
                 }
             ).execute()
             data = getattr(resp, "data", None) or []
-        except Exception:
+        except Exception as e:
+            # Only log if it's not the known "missing function" error to avoid spam
+            error_details = str(e)
+            if "PGRST202" not in error_details and "Could not find the function" not in error_details:
+                print(f"[NOTE] RPC search unavailable for '{kw}', using fallback.")
             counts["rpc_errors"] += 1
             # Fallback to simple ilike query on markets table
             try:
                 resp = (
                     client.table("markets")
                     .select(
-                        "condition_id,question,slug,event_title,status,volume_usd,yes_token_id,no_token_id,token_id,outcome_yes_price"
+                        "condition_id,question,raw,event_title,status,volume_usd,yes_token_id,no_token_id,token_id,outcome_yes_price"
                     )
                     .or_(f"question.ilike.%{kw}%,event_title.ilike.%{kw}%")
                     .eq("status", "open")
@@ -182,7 +187,8 @@ def _search_supabase_markets(client, keywords: List[str], k: int) -> Tuple[Dict[
                 )
                 data = getattr(resp, "data", None) or []
                 counts["fallback_table_queries"] += 1
-            except Exception:
+            except Exception as e:
+                print(f"[ERROR] Supabase fallback query failed: {e}")
                 continue
 
         if not isinstance(data, list):
@@ -196,10 +202,33 @@ def _search_supabase_markets(client, keywords: List[str], k: int) -> Tuple[Dict[
             if cid in results:
                 counts["deduped"] += 1
                 continue
+
+            # Parse slug from raw if valid
+            slug = r.get("slug")
+            raw_val = r.get("raw")
+            if raw_val:
+                try:
+                    import json
+                    if isinstance(raw_val, str):
+                        raw_data = json.loads(raw_val)
+                    else:
+                        raw_data = raw_val
+                    
+                    # 1. Try event slug (preferred)
+                    events = raw_data.get("events")
+                    if isinstance(events, list) and len(events) > 0:
+                        slug = events[0].get("slug") or slug
+                    
+                    # 2. Fallback to market slug in raw
+                    if not slug:
+                        slug = raw_data.get("slug") or slug
+                except Exception:
+                    pass
+
             results[cid] = {
                 "condition_id": cid,
                 "question": r.get("question"),
-                "slug": r.get("slug"),
+                "slug": slug,
                 "event_title": r.get("event_title"),
                 "status": r.get("status"),
                 "end_date": r.get("end_date"),

@@ -137,9 +137,15 @@ export interface RecommendationRequest {
     top_k?: number;
 }
 
+export interface TimeseriesPoint {
+    date: string;
+    value: number;
+}
+
 export interface RecommendationResponse {
     thesis: string;
     status: string;
+    warning?: string;  // [NEW] Warning message for low confidence
     anchor: {
         question: string;
         slug: string;
@@ -148,8 +154,23 @@ export interface RecommendationResponse {
         token_choice: string;
         ai_reasoning: string;
         ai_confidence: number;
-    };
+    } | null; // [NEW] Allow nullable anchor
     portfolio: PortfolioItem[];
+    timeseries?: {
+        metadata: {
+            generated_at: string;
+            rolling_windows_days: number[];
+        };
+        price_series: {
+            anchor: TimeseriesPoint[];
+            candidates: Record<string, TimeseriesPoint[]>;
+        };
+        pnl_curves: {
+            portfolio: TimeseriesPoint[];
+            positions: Record<string, TimeseriesPoint[]>;
+        };
+        rolling_correlations: Record<string, Array<{ date: string; token_id: string; correlation: number }>>;
+    };
 }
 
 export interface PortfolioItem {
