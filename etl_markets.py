@@ -4,9 +4,8 @@ import os
 from typing import Any, Dict, List
 
 import requests
-from sqlalchemy import text
 
-from db import get_engine, get_supabase
+from db import get_supabase
 
 
 GAMMA_BASE = os.getenv("POLYMARKET_GAMMA_BASE_URL", "https://gamma-api.polymarket.com")
@@ -84,37 +83,6 @@ def flatten_market(m: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def upsert_markets(engine, markets: List[Dict[str, Any]]) -> None:
-    if not markets:
-        return
-    stmt = text(
-        """
-        INSERT INTO markets (
-            condition_id, question, event_title, status, end_date, volume_usd,
-            liquidity, yes_token_id, no_token_id, token_id, outcome_yes_price, raw, updated_at
-        ) VALUES (
-            :condition_id, :question, :event_title, :status, :end_date, :volume_usd,
-            :liquidity, :yes_token_id, :no_token_id, :token_id, :outcome_yes_price, :raw, NOW()
-        )
-        ON CONFLICT (condition_id) DO UPDATE SET
-            question = EXCLUDED.question,
-            event_title = EXCLUDED.event_title,
-            status = EXCLUDED.status,
-            end_date = EXCLUDED.end_date,
-            volume_usd = EXCLUDED.volume_usd,
-            liquidity = EXCLUDED.liquidity,
-            yes_token_id = EXCLUDED.yes_token_id,
-            no_token_id = EXCLUDED.no_token_id,
-            token_id = EXCLUDED.token_id,
-            outcome_yes_price = EXCLUDED.outcome_yes_price,
-            raw = EXCLUDED.raw,
-            updated_at = NOW();
-        """
-    )
-    with engine.begin() as conn:
-        conn.execute(stmt, markets)
-
-
 def upsert_supabase(client, markets: List[Dict[str, Any]]) -> None:
     if not markets:
         return
@@ -134,7 +102,7 @@ def main():
 
     supabase_client = get_supabase()
     if not supabase_client:
-        raise SystemExit("DATABASE_URL/SUPABASE_DB_URL or SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY must be set.")
+        raise SystemExit("SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY (or SUPABASE_SECRET_KEY/SUPABASE_KEY) must be set.")
 
     fetched = 0
     offset = 0
@@ -148,8 +116,7 @@ def main():
         if not page:
             break
         flattened = [f for f in (flatten_market(m) for m in page) if f.get("condition_id")]
-        if supabase_client:
-            upsert_supabase(supabase_client, flattened)
+        upsert_supabase(supabase_client, flattened)
         fetched += len(flattened)
         offset += this_limit
         print(f"Ingested {fetched} markets...")

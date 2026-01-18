@@ -19,9 +19,9 @@ dependencies = [
   "tenacity>=8.2",
   "fastapi>=0.110",
   "uvicorn>=0.29",
-  "sqlalchemy>=2.0",
-  "psycopg2-binary>=2.9",
   "supabase>=2.4",
+  "google-genai>=0.5"
+
 ]
 
 [tool.setuptools]
