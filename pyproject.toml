@@ -17,6 +17,9 @@ dependencies = [
   "rapidfuzz>=3.0",
   "requests>=2.31",
   "tenacity>=8.2",
+  "fastapi>=0.110",
+  "uvicorn>=0.29",
+  "sqlalchemy>=2.0",
 ]
 
 [tool.setuptools]
