@@ -3,7 +3,7 @@ from typing import Dict, List, Tuple, Any
 from rapidfuzz import fuzz
 
 from llm_keywords import generate_keywords
-from market_data import search_polymarket_events
+from db import get_supabase
 from llm_proxy import generate_proxy_theses
 
 KEYWORD_MATCH_THRESHOLD = 70
@@ -20,27 +20,15 @@ def discover_markets(
     explain_filters = {"deduped": 0, "total_found": 0, "skipped_non_dict": 0}
     scored = []
 
-    for kw in keywords:
-        try:
-            events = search_polymarket_events(kw, limit=k)
-        except Exception:
-            continue
-
-        for event in events or []:
-            if not isinstance(event, dict):
-                explain_filters["skipped_non_dict"] += 1
-                continue
-            markets = event.get("markets") or []
-            for m in markets:
-                condition_id = m.get("conditionId") or m.get("condition_id")
-                if not condition_id:
-                    continue
-                if condition_id in seen:
-                    explain_filters["deduped"] += 1
-                    continue
-                market_flat = _flatten_market(event, m)
-                explain_filters["total_found"] += 1
-                seen[condition_id] = market_flat
+    # Supabase-backed lookup only
+    supabase_client = get_supabase()
+    if supabase_client:
+        supa_markets, supa_counts = _search_supabase_markets(supabase_client, keywords, k)
+        seen.update(supa_markets)
+        explain_filters["total_found"] += supa_counts.get("total_found", 0)
+        explain_filters["deduped"] += supa_counts.get("deduped", 0)
+    else:
+        explain_filters["notes"] = ["Supabase client not configured; no markets returned"]
 
     # Score by fuzzy relevance to query plus volume
     for m in seen.values():
@@ -73,11 +61,11 @@ def discover_markets(
         "keywords": keywords,
         "filters": explain_filters,
         "returned": len(working),
-        "notes": [
-            "relevance_score = 0.7*fuzzy(query, text) + 0.03*min(volume,1M)",
-            f"best_keyword_match >= {keyword_match_threshold} filter applied",
-        ],
     }
+    explain.setdefault("notes", []).extend([
+        "relevance_score = 0.7*fuzzy(query, text) + 0.03*min(volume,1M)",
+        f"best_keyword_match >= {keyword_match_threshold} filter applied",
+    ])
     if allow_fallback and not working:
         proxy_theses = generate_proxy_theses(query)
         explain["fallback"] = {"proxy_theses": proxy_theses}
@@ -90,6 +78,54 @@ def discover_markets(
                     working.append(c)
         explain["returned"] = len(working)
     return working, explain
+
+
+def _search_supabase_markets(client, keywords: List[str], k: int) -> Tuple[Dict[str, Dict[str, Any]], Dict[str, int]]:
+    """
+    Search Supabase 'markets' table using ilike on question/event_title.
+    """
+    results: Dict[str, Dict[str, Any]] = {}
+    counts = {"total_found": 0, "deduped": 0}
+
+    for kw in keywords:
+        try:
+            resp = (
+                client.table("markets")
+                .select(
+                    "condition_id,question,event_title,status,end_date,volume_usd,yes_token_id,no_token_id,token_id,outcome_yes_price"
+                )
+                .or_(f"question.ilike.%{kw}%,event_title.ilike.%{kw}%")
+                .eq("status", "open")
+                .order("volume_usd", desc=True)
+                .limit(k)
+                .execute()
+            )
+        except Exception:
+            continue
+
+        data = getattr(resp, "data", None) or []
+        counts["total_found"] += len(data)
+        for r in data:
+            cid = r.get("condition_id")
+            if not cid:
+                continue
+            if cid in results:
+                counts["deduped"] += 1
+                continue
+            results[cid] = {
+                "condition_id": cid,
+                "question": r.get("question"),
+                "event_title": r.get("event_title"),
+                "status": r.get("status"),
+                "end_date": r.get("end_date"),
+                "volume_usd": float(r.get("volume_usd") or 0),
+                "yes_token_id": r.get("yes_token_id"),
+                "no_token_id": r.get("no_token_id"),
+                "token_id": r.get("token_id") or r.get("yes_token_id"),
+                "outcome_yes_price": float(r.get("outcome_yes_price") or 0.5),
+            }
+
+    return results, counts
 
 
 def _flatten_market(event: Dict[str, Any], market: Dict[str, Any]) -> Dict[str, Any]:
