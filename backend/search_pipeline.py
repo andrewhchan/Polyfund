@@ -34,7 +34,7 @@ def query_markets_by_keywords(
             resp = (
                 client.table("markets")
                 .select(
-                    "condition_id,question,slug,event_title,status,volume_usd,yes_token_id,no_token_id,token_id,outcome_yes_price"
+                    "condition_id,question,raw,event_title,status,volume_usd,yes_token_id,no_token_id,token_id,outcome_yes_price"
                 )
                 .or_(f"question.ilike.%{kw}%,event_title.ilike.%{kw}%")
                 .eq("status", "open")
@@ -51,10 +51,28 @@ def query_markets_by_keywords(
             cid = r.get("condition_id")
             if not cid or cid in results:
                 continue
+
+            # Parse slug from raw JSONB column
+            slug = None
+            raw_val = r.get("raw")
+            if raw_val:
+                try:
+                    import json
+                    raw_data = json.loads(raw_val) if isinstance(raw_val, str) else raw_val
+                    # 1. Try event slug (preferred for Polymarket links)
+                    events = raw_data.get("events")
+                    if isinstance(events, list) and len(events) > 0:
+                        slug = events[0].get("slug")
+                    # 2. Fallback to market-level slug
+                    if not slug:
+                        slug = raw_data.get("slug")
+                except Exception:
+                    pass
+
             results[cid] = {
                 "condition_id": cid,
                 "question": r.get("question"),
-                "slug": r.get("slug"),
+                "slug": slug,
                 "event_title": r.get("event_title"),
                 "status": r.get("status"),
                 "volume_usd": float(r.get("volume_usd") or 0),
@@ -238,6 +256,41 @@ def _search_supabase_markets(client, keywords: List[str], k: int) -> Tuple[Dict[
                 "token_id": r.get("token_id") or r.get("yes_token_id"),
                 "outcome_yes_price": float(r.get("outcome_yes_price") or 0.5),
             }
+
+    # Backfill missing slugs by fetching raw data for markets without slug
+    missing_slug_cids = [cid for cid, m in results.items() if not m.get("slug")]
+    if missing_slug_cids and client:
+        try:
+            # Fetch raw column for markets missing slug
+            backfill_resp = (
+                client.table("markets")
+                .select("condition_id,raw")
+                .in_("condition_id", missing_slug_cids)
+                .execute()
+            )
+            backfill_data = getattr(backfill_resp, "data", None) or []
+
+            for r in backfill_data:
+                cid = r.get("condition_id")
+                raw_val = r.get("raw")
+                if cid and raw_val and cid in results:
+                    try:
+                        import json
+                        raw_data = json.loads(raw_val) if isinstance(raw_val, str) else raw_val
+                        slug = None
+                        # Try event slug first
+                        events = raw_data.get("events")
+                        if isinstance(events, list) and len(events) > 0:
+                            slug = events[0].get("slug")
+                        # Fallback to market slug
+                        if not slug:
+                            slug = raw_data.get("slug")
+                        if slug:
+                            results[cid]["slug"] = slug
+                    except Exception:
+                        pass
+        except Exception as e:
+            print(f"[WARN] Slug backfill query failed: {e}")
 
     return results, counts
 

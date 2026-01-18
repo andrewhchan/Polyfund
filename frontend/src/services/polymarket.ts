@@ -5,6 +5,7 @@ export interface TrendingMarket {
     tag: string;
     icon: string;
     spread?: string;
+    slug: string;
 }
 
 interface GammaMarket {
@@ -28,6 +29,7 @@ interface GammaMarket {
 interface GammaEvent {
     id: string;
     title: string;
+    slug: string;
     markets: GammaMarket[];
     // Event level images
     icon?: string;
@@ -117,7 +119,8 @@ export async function fetchTrendingMarkets(limit: number = 20): Promise<Trending
                 volume: volumeFormatted,
                 tag: 'Top Liquid',
                 icon: iconUrl,
-                spread: undefined
+                spread: undefined,
+                slug: event.slug
             });
         }
 
