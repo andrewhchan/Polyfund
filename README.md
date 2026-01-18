@@ -20,13 +20,24 @@ FastAPI backend that discovers Polymarket markets for a free-text thesis, select
 - `GEMINI_API_KEY` (optional; keyword generation uses mock fallback if missing)
 - `LLM_PROVIDER` (`openai` | `gemini` | `mock`, default mock)
 - LLM fallback: If no close market matches (keyword threshold default 70), proxy theses are generated to re-run search.
+- `DATABASE_URL` or `SUPABASE_DB_URL` (optional): Postgres connection; if set, discovery will search the `markets` table before hitting Gamma.
 
 ## Run
 
+Using `uv` (recommended):
 ```bash
-pip install -r requirements.txt
-uvicorn app:app --reload
+uv sync
+uv run uvicorn app:app --reload
 ```
+
+## ETL: load markets into Postgres
+
+1) Ensure `DATABASE_URL` (or `SUPABASE_DB_URL`) points to your Postgres with the `markets` table (see schema in earlier response).
+2) Run the ingest (defaults to 1000 markets; adjust `--limit` and `--batch-size`):
+```bash
+uv run python etl_markets.py --limit 1000 --batch-size 500
+```
+Set `POLYMARKET_GAMMA_BASE_URL` if you need a non-default endpoint.
 
 ## Tests
 
